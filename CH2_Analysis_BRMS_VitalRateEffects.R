@@ -2,31 +2,18 @@
 #Date Last Edited: 20190915
 
 #### Library ####
-library(lme4)
-library(lmerTest)
-library(ggplot2)
-library(car)
-library(popdemo)
-library(dplyr)
-library(tidyr)
-library(viridis)
-library(MASS)
-library(MuMIn)
+library(tidyverse)
 library(rstan)
 library(brms)
 library(purrr)
-library(broom)
 library(devtools)
 library(furrr)
-library(tidyverse)
-library(scales)
-library(cowplot)
 
 #### Bring in vital rate data --> I.df ####
-vr.mc<-read.csv("Dissertation/Ivesia/2017/DFs/VitalRates_Microclimate.csv", stringsAsFactors = F); head(vr.mc)
+vr.mc<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/VitalRates_Microclimate.csv", stringsAsFactors = F); head(vr.mc)
 
 #Add in experimental metdata
-plot.chars<-read.csv("Dissertation/Ivesia/2016/CreatedDFs/trt.plot.data.csv")
+plot.chars<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/trt.plot.data.csv")
 colnames(plot.chars)<-c("plot","zone","site","trt","type", "elevation");plot.chars$plot<-gsub("IL","",plot.chars$plot)
 head(plot.chars)
 
@@ -77,7 +64,7 @@ head(df)
 df <- df [, -c(12:17)]
 
 # bring in climate data averaged across all ambient plots and years
-microclimate<-read.csv("Dissertation/Ivesia/2017/DFS/Microclimate.csv")
+microclimate<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/Microclimate.csv")
 head(microclimate)
 head(plot.chars)
 mc.trt<-merge(microclimate, plot.chars)
@@ -114,11 +101,23 @@ df$elevation.s <- scale(df$elevation)
 
 ##### Define Functions of vital rates ####
 #load in models
-survival_model <- readRDS("Dissertation/CH2/Doak_Suggestions/surv_mod_add_ave.rds")
-growth_model <- readRDS("Dissertation/CH2/Doak_Suggestions/grwth_mod_add_ave.rds")
-establishment_model <- readRDS("Dissertation/CH2/Doak_Suggestions/recruit_mod_add_ave.rds")
+dir.create("data/data_output", recursive = TRUE)
+download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/surv_mod_add_ave.rds", 
+              destfile = "data/data_output/surv_mod_add_ave.rds")
+survival_model <- readRDS("data/data_output/surv_mod_add_ave.rds")
+
+download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/grwth_mod_add_ave.rds",
+              destfile = "data/data_output/grwth_mod_add_ave.rds")
+growth_model <- readRDS("data/data_output/grwth_mod_add_ave.rds")
+
+download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/recruit_mod_add_ave.rds",
+              destfile = "data/data_output/recruit_mod_add_ave.rds")
+establishment_model <- readRDS("data/data_output/recruit_mod_add_ave.rds")
 establishment_model$data <- establishment_model$data %>% mutate(seeds.avaliable = ifelse(seeds.avaliable == 0, yes = NA, no = seeds.avaliable)) # removed zeros from $data from the model object because error trapping for number of trials became more strict in brms 2.10
-hurdleRep <- readRDS("Dissertation/CH2/Doak_Suggestions/hurdle_mod_add_ave.rds")
+
+download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/hurdle_mod_add_ave.rds",
+              destfile = "data/data_output/hurdle_mod_add_ave.rds")
+hurdleRep <- readRDS("data/data_output/hurdle_mod_add_ave.rds")
 
 # kernel construction
 min.size=min(df[,c("size.s", "sizeNext.s")], na.rm=T)
