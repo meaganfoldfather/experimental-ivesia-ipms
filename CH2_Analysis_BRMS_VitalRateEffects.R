@@ -8,6 +8,8 @@ library(brms)
 library(purrr)
 library(devtools)
 library(furrr)
+library(aws.s3)
+library(data.table)
 
 #### Bring in vital rate data --> I.df ####
 vr.mc<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/VitalRates_Microclimate.csv", stringsAsFactors = F); head(vr.mc)
@@ -221,5 +223,4 @@ mc_vr_effects <-
 end_time <- Sys.time()
 end_time - start_time
 
-#write_csv() 
-
+s3write_using(mc_vr_effects, FUN = data.table::fwrite, object = "mc_vr_effects.csv", bucket = "earthlab-mkoontz/experimental-ivesia-ipms")
