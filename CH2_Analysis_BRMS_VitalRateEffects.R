@@ -179,7 +179,7 @@ f.yx <- function(x, xp ,degree.days = 0, vwc = 0, snow.days = 0, heat = 0, water
 }
 
 #### Making Whole Construction Function ####
-kernel_construction <- function(x,degree.days = 0, vwc = 0, snow.days = 0, heat.s = 0, water.s = 0,heat.g = 0, water.g = 0, heat.f = 0, water.f = 0){
+kernel_construction <- function(x, degree.days = 0, vwc = 0, snow.days = 0, heat.s = 0, water.s = 0, heat.g = 0, water.g = 0, heat.f = 0, water.f = 0){
   
   F.mat = h*simplify2array(f.yx(x, x, degree.days, vwc, snow.days, heat = heat.f, water = water.f))
   S = s.x(x, degree.days, vwc, snow.days, heat = heat.s, water = water.s)
@@ -197,7 +197,9 @@ kernel_construction <- function(x,degree.days = 0, vwc = 0, snow.days = 0, heat.
 }
 
 #Treatment Effects Across Climatic Gradients
-plan(multiprocess)
+# Running on the Alien with 10 workers on 2020-05-06; runtime = 
+
+plan(multiprocess, workers = 10)
 start_time <- Sys.time()
 start_time
 
@@ -208,36 +210,44 @@ vital_effects <-
     heat.g = c(0,0,0,1,0,1,0,0,0,0), 
     water.g = c(0,0,0,0,1,1,0,0,0,0), 
     heat.s = c(rep(0,6),1,0,1,0), 
-    water.s = c(rep(0,7),1,1,0))
-
-length.out <- 5
-microclimate_effects <-data.frame(expand.grid(degree.days = seq(-2, 2, length.out = length.out), vwc = seq(-2, 2, length.out = length.out), snow.days =  seq(-2, 2, length.out = length.out)))
+    water.s = c(rep(0,7),1,1,0)) %>% 
+  rbind(c(1, 0, 1, 0, 1, 0)) %>% # heat every vital rate
+  rbind(c(0, 1, 0, 1, 0, 1)) %>% # water every vital rate
+  rbind(c(1, 1, 1, 1, 1, 1)) # heat and water every vital rate
+  
+microclimate_effects <-
+  tidyr::crossing(degree.days = seq(-1.5, 2, by = 0.5),
+                  vwc = seq(-1.5, 1, by = 0.5),
+                  snow.days = seq(-1.5, 1.5, by = 0.5))
 
 mc_vr_effects <-
   microclimate_effects %>% 
   dplyr::mutate(vital_effects = list(vital_effects)) %>% 
-  unnest(vital_effects) %>% 
-  mutate(lambda = future_pmap(., kernel_construction, y)) %>%
-  unnest()
-
-end_time <- Sys.time()
-end_time - start_time
-
-# s3write_using(mc_vr_effects, FUN = data.table::fwrite, object = "mc_vr_effects.csv", bucket = "earthlab-mkoontz/experimental-ivesia-ipms")
+  tidyr::unnest(vital_effects) %>% 
+  mutate(lambda = furrr::future_pmap(., kernel_construction, y)) %>%
+  tidyr::unnest()
 
 mcvr <- 
   mc_vr_effects %>% 
-  dplyr::mutate(manipulated_vr = case_when(heat.f == 1 | water.f == 1 ~ "fecundity",
+  dplyr::mutate(manipulated_vr = case_when(heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
+                                           heat.f == 1 & heat.g == 1 & heat.s == 1 ~ "heat",
+                                           water.f == 1 & water.g == 1 & water.s == 1 ~ "water",
+                                           heat.f == 1 | water.f == 1 ~ "fecundity",
                                            heat.g == 1 | water.g == 1 ~ "growth",
                                            heat.s == 1 | water.s == 1 ~ "survivorship",
-                                           TRUE ~ "none"))
+                                           TRUE ~ "ambient"))
+
+end_time <- Sys.time()
+data.table::fwrite(x = mcvr, file = here::here("data", "data_output", "mc_vr_effects.csv"))
+
+base::difftime(end_time, start_time, units = "mins")
 
 
 # fecundity ---------------------------------------------------------------
 
 trt_on_fecundity <- 
   mcvr %>% 
-  dplyr::filter(manipulated_vr %in% c("fecundity", "none")) %>% 
+  dplyr::filter(manipulated_vr %in% c("fecundity", "ambient")) %>% 
   dplyr::select(manipulated_vr, degree.days, vwc, snow.days, heat.f, water.f, lambda)
 
 fecundity_contrasts <- 
@@ -277,7 +287,7 @@ fecundity_contrasts <-
 
 trt_on_growth <- 
   mcvr %>% 
-  filter(manipulated_vr %in% c("growth", "none")) %>% 
+  filter(manipulated_vr %in% c("growth", "ambient")) %>% 
   dplyr::select(manipulated_vr, degree.days, vwc, snow.days, heat.g, water.g, lambda)
 
 
@@ -318,7 +328,7 @@ growth_contrasts <-
 
 trt_on_survivorship <- 
   mcvr %>% 
-  filter(manipulated_vr %in% c("survivorship", "none")) %>% 
+  filter(manipulated_vr %in% c("survivorship", "ambient")) %>% 
   dplyr::select(manipulated_vr, degree.days, vwc, snow.days, heat.s, water.s, lambda)
 
 
@@ -363,60 +373,78 @@ survivorship_contrasts <-
 ggplot(fecundity_contrasts %>% filter(snow.days == 0), aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # fecundity manipulation; snow days, vwc --------------------------------
 
 ggplot(fecundity_contrasts %>% filter(degree.days == 0), aes(x = snow.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # fecundity manipulation; snow days, degree.days --------------------------------
 
 ggplot(fecundity_contrasts %>% filter(vwc == 0), aes(x = degree.days, y = snow.days, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # growth manipulation; degree days, vwc --------------------------------
 
 ggplot(growth_contrasts %>% filter(snow.days == 0), aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # growth manipulation; snow days, vwc --------------------------------
 
 ggplot(growth_contrasts %>% filter(degree.days == 0), aes(x = snow.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # growth manipulation; snow days, degree.days --------------------------------
 
 ggplot(growth_contrasts %>% filter(vwc == 0), aes(x = degree.days, y = snow.days, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # survivorship manipulation; degree days, vwc --------------------------------
 
 ggplot(survivorship_contrasts %>% filter(snow.days == 0), aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # survivorship manipulation; snow days, vwc --------------------------------
 
 ggplot(survivorship_contrasts %>% filter(degree.days == 0), aes(x = snow.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
 
 # survivorship manipulation; snow days, degree.days --------------------------------
 
 ggplot(survivorship_contrasts %>% filter(vwc == 0), aes(x = degree.days, y = snow.days, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast))
+  facet_grid(rows = vars(trt_contrast)) +
+  coord_fixed() +
+  theme_minimal()
