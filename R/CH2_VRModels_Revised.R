@@ -132,7 +132,7 @@ mod = brms::brm(
   cores = 4,
   control = list(adapt_delta = .99, max_treedepth = 15)
 )
-toc()
+toc() # 1126.566 seconds on Alien
 
 summary(mod)
 plot(mod)
@@ -140,6 +140,11 @@ bayes_R2(mod)
 pp_check(mod,nsamples = 50)
 
 #saveRDS(object = mod, file = "surv_mod.rds")
+
+dir.create("out", showWarnings = FALSE)
+readr::write_rds(x = mod, file = "out/surv_mod_sum.rds")
+
+system2(command = "aws", args = "s3 cp out/surv_mod_sum.rds s3://earthlab-mkoontz/experimental-ivesia-ipms/surv_mod_sum.rds")
 
 # Trying T1 (year) as a fixed effect
 # m1 = surv ~ size.s*degree.days*heat*water + size.s*vwc*heat*water + t1 + (1|site/plot)
