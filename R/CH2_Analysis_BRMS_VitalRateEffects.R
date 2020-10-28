@@ -150,6 +150,7 @@ h=y[2]-y[1] # step size
 #1. survival probability function
 s.x=function(x, degree.days = 0, vwc = 0, heat = 0, water = 0) {
   new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA) # use t1 = NA so that the fitted() function marginalizes across all levels of the t1 categorical predictor, using the grand mean (because we use sum coding of that factor)
+  # https://github.com/paul-buerkner/brms/issues/66
   survivorship <- fitted(survival_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE)
   return(survivorship)
 }
@@ -259,6 +260,14 @@ system2(command = "aws", args = "s3 cp data/data_output/mc_vr_effects.csv s3://e
 (end_time <- Sys.time())
 
 (base::difftime(end_time, start_time, units = "mins"))
+
+
+if(!file.exists("data/data_output/mc_vr_effects.csv")) {
+  
+  download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/mc_vr_effects.csv",
+                destfile = "data/data_output/mc_vr_effects.csv")
+}
+mcvr <- readr::read_csv("data/data_output/mc_vr_effects.csv")
 
 
 # fecundity ---------------------------------------------------------------
