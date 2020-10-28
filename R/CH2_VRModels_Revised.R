@@ -141,10 +141,10 @@ pp_check(mod,nsamples = 50)
 
 #saveRDS(object = mod, file = "surv_mod.rds")
 
-dir.create("out", showWarnings = FALSE)
-readr::write_rds(x = mod, file = "out/surv_mod_sum.rds")
+dir.create("data/data_output", showWarnings = FALSE)
+readr::write_rds(x = mod, file = "data/data_output/surv_mod_sum.rds")
 
-system2(command = "aws", args = "s3 cp out/surv_mod_sum.rds s3://earthlab-mkoontz/experimental-ivesia-ipms/surv_mod_sum.rds")
+system2(command = "aws", args = "s3 cp data/data_output/surv_mod_sum.rds s3://earthlab-mkoontz/experimental-ivesia-ipms/surv_mod_sum.rds")
 
 # Trying T1 (year) as a fixed effect
 # m1 = surv ~ size.s*degree.days*heat*water + size.s*vwc*heat*water + t1 + (1|site/plot)

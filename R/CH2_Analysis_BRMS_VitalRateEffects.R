@@ -103,23 +103,41 @@ df$elevation.s <- scale(df$elevation)
 
 ##### Define Functions of vital rates ####
 #load in models
-dir.create("data/data_output", recursive = TRUE)
-download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/surv_mod_add_ave.rds", 
-              destfile = "data/data_output/surv_mod_add_ave.rds")
-survival_model <- readRDS("data/data_output/surv_mod_add_ave.rds")
+dir.create("data/data_output", recursive = TRUE, showWarnings = FALSE)
 
-download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/grwth_mod_add_ave.rds",
-              destfile = "data/data_output/grwth_mod_add_ave.rds")
-growth_model <- readRDS("data/data_output/grwth_mod_add_ave.rds")
+# Filenames of the 4 different vital rate models
+surv_mod_fname <- "surv_mod_sum.rds"
+growth_mod_fname <- "grwth_mod_add_ave_sum.rds"
+establishment_mod_fname <- "recruit_mod_add_ave_sum.rds"
+hurdle_mod_fname <- "hurdle_mod_add_ave_sum.rds"
 
-download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/recruit_mod_add_ave.rds",
-              destfile = "data/data_output/recruit_mod_add_ave.rds")
-establishment_model <- readRDS("data/data_output/recruit_mod_add_ave.rds")
-establishment_model$data <- establishment_model$data %>% mutate(seeds.avaliable = ifelse(seeds.avaliable == 0, yes = NA, no = seeds.avaliable)) # removed zeros from $data from the model object because error trapping for number of trials became more strict in brms 2.10
+if(!file.exists(file.path("data/data_output", surv_mod_fname))) {
+  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{surv_mod_fname}"), 
+                destfile = file.path("data/data_output", surv_mod_fname))
+}
+survival_model <- readr::read_rds(file.path("data/data_output", surv_mod_fname))
 
-download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/hurdle_mod_add_ave.rds",
-              destfile = "data/data_output/hurdle_mod_add_ave.rds")
-hurdleRep <- readRDS("data/data_output/hurdle_mod_add_ave.rds")
+if(!file.exists(file.path("data/data_output", growth_mod_fname))) {
+  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{growth_mod_fname}"),
+                destfile = file.path("data/data_output", growth_mod_fname))
+}
+growth_model <- readRDS(file.path("data/data_output", growth_mod_fname))
+
+if(!file.exists(file.path("data/data_output", establishment_mod_fname))) {
+  
+  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{establishment_mod_fname}"),
+                destfile = file.path("data/data_output", establishment_mod_fname))
+}
+establishment_model <- readRDS(file.path("data/data_output", establishment_mod_fname))
+
+# establishment_model$data <- establishment_model$data %>% mutate(seeds.avaliable = ifelse(seeds.avaliable == 0, yes = NA, no = seeds.avaliable)) # removed zeros from $data from the model object because error trapping for number of trials became more strict in brms 2.10
+
+
+if(!file.exists(file.path("data/data_output", hurdle_mod_fname))) {
+  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{hurdle_mod_fname}"),
+                destfile = file.path("data/data_output", hurdle_mod_fname))
+}
+hurdleRep <- readRDS(file.path("data/data_output", hurdle_mod_fname))
 
 # kernel construction
 min.size=min(df[,c("size.s", "sizeNext.s")], na.rm=T)
@@ -130,15 +148,15 @@ y=0.5*(b[1:n]+b[2:(n+1)]) # mesh points
 h=y[2]-y[1] # step size
 
 #1. survival probability function
-s.x=function(x, degree.days = 0, vwc = 0, snow.days = 0, heat = 0, water = 0) {
-  new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, snow.days = snow.days, heat = heat, water = water)
+s.x=function(x, degree.days = 0, vwc = 0, heat = 0, water = 0) {
+  new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA) # use t1 = NA so that the fitted() function marginalizes across all levels of the t1 categorical predictor, using the grand mean (because we use sum coding of that factor)
   survivorship <- fitted(survival_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE)
   return(survivorship)
 }
 
 # 2. growth function
-g.yx=function(xp,x,degree.days = 0, vwc = 0, snow.days = 0, heat = 0, water = 0) {
-  new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, snow.days = snow.days, heat = heat, water = water)
+g.yx=function(xp,x,degree.days = 0, vwc = 0, heat = 0, water = 0) {
+  new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
   sizeNext.s <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE) 
   
   
@@ -152,8 +170,8 @@ g.yx=function(xp,x,degree.days = 0, vwc = 0, snow.days = 0, heat = 0, water = 0)
 }
 
 # 3. reproduction function
-f.yx <- function(x, xp ,degree.days = 0, vwc = 0, snow.days = 0, heat = 0, water = 0) {
-  new.data <- data.frame(sizeNext.s = x, degree.days = degree.days, vwc = vwc, snow.days = snow.days, heat = heat, water = water)
+f.yx <- function(x, xp ,degree.days = 0, vwc = 0, heat = 0, water = 0) {
+  new.data <- data.frame(sizeNext.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
   
   reproduction <- fitted(hurdleRep, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE)
   reproduction
@@ -179,12 +197,12 @@ f.yx <- function(x, xp ,degree.days = 0, vwc = 0, snow.days = 0, heat = 0, water
 }
 
 #### Making Whole Construction Function ####
-kernel_construction <- function(x, degree.days = 0, vwc = 0, snow.days = 0, heat.s = 0, water.s = 0, heat.g = 0, water.g = 0, heat.f = 0, water.f = 0){
+kernel_construction <- function(x, degree.days = 0, vwc = 0, heat.s = 0, water.s = 0, heat.g = 0, water.g = 0, heat.f = 0, water.f = 0){
   
-  F.mat = h*simplify2array(f.yx(x, x, degree.days, vwc, snow.days, heat = heat.f, water = water.f))
-  S = s.x(x, degree.days, vwc, snow.days, heat = heat.s, water = water.s)
+  F.mat = h*simplify2array(f.yx(x, x, degree.days, vwc, heat = heat.f, water = water.f))
+  S = s.x(x, degree.days, vwc, heat = heat.s, water = water.s)
   S = array(t(S), dim = c(1, 100, 2000))
-  G = h * g.yx(x, x, degree.days, vwc, snow.days, heat = heat.g, water = water.g)
+  G = h * g.yx(x, x, degree.days, vwc, heat = heat.g, water = water.g)
   G = array(G, dim = c(100, 100, 1))
   
   P = array(dim=c(100,100,2000))
@@ -214,12 +232,10 @@ vital_effects <-
   rbind(c(1, 0, 1, 0, 1, 0)) %>% # heat every vital rate
   rbind(c(0, 1, 0, 1, 0, 1)) %>% # water every vital rate
   rbind(c(1, 1, 1, 1, 1, 1)) # heat and water every vital rate
-  
+
 microclimate_effects <-
   tidyr::crossing(degree.days = seq(-1.5, 2, by = 0.5),
-                  vwc = seq(-1.5, 1, by = 0.5),
-                  snow.days = seq(-1.5, 1.5, by = 0.5))
-
+                  vwc = seq(-1.5, 1, by = 0.5))
 mc_vr_effects <-
   microclimate_effects %>% 
   dplyr::mutate(vital_effects = list(vital_effects)) %>% 
@@ -237,10 +253,12 @@ mcvr <-
                                            heat.s == 1 | water.s == 1 ~ "survivorship",
                                            TRUE ~ "ambient"))
 
-end_time <- Sys.time()
 data.table::fwrite(x = mcvr, file = here::here("data", "data_output", "mc_vr_effects.csv"))
 
-base::difftime(end_time, start_time, units = "mins")
+system2(command = "aws", args = "s3 cp data/data_output/mc_vr_effects.csv s3://earthlab-mkoontz/experimental-ivesia-ipms/mc_vr_effects.csv")
+(end_time <- Sys.time())
+
+(base::difftime(end_time, start_time, units = "mins"))
 
 
 # fecundity ---------------------------------------------------------------
