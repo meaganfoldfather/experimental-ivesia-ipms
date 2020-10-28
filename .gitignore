@@ -37,3 +37,4 @@ rsconnect/
 .Rproj.user
 
 data/
+.DS_Store
