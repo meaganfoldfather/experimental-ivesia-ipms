@@ -2,20 +2,78 @@
 #Date Last Edited: 20190915
 
 #### Library ####
-library(tidyverse)
-library(rstan)
+library(dplyr)
 library(brms)
 library(purrr)
-library(devtools)
 library(furrr)
-library(aws.s3)
 library(data.table)
+library(glue)
+
+dir.create("data/data_output", recursive = TRUE, showWarnings = FALSE)
+
+# remote_source is where we can find the vital rate models to download
+remote_source <- "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms"
+# remote_target is where we put the lambda estimates from the IPM
+remote_target <- "s3://earthlab-mkoontz/experimental-ivesia-ipms"
+
+# Desired filenames for the new vital rate models
+# If they are the same as previously-uploaded .rds files at the `remote_target`,
+# AND the `overwrite` variable is TRUE (it is FALSE by default), then those
+# vital rate models will be overwritten
+
+surv_mod_fname <- "surv_mod_additive.rds"
+growth_mod_fname <- "grwth_mod_additive.rds"
+establishment_mod_fname <- "recruit_mod_additive.rds"
+hurdle_mod_fname <- "hurdle_mod_additive.rds"
+
+lambda_df_fname <- "mc_vr_effects.csv"
+
+overwrite <- FALSE
+
+##### Get vital rate models from remote_source ####
+
+if(!file.exists(file.path("data/data_output", surv_mod_fname))) {
+  download.file(url = glue::glue("{remote_source}/{surv_mod_fname}"), 
+                destfile = file.path("data/data_output", surv_mod_fname))
+}
+
+if(!file.exists(file.path("data/data_output", growth_mod_fname))) {
+  download.file(url = glue::glue("{remote_source}/{growth_mod_fname}"),
+                destfile = file.path("data/data_output", growth_mod_fname))
+}
+
+if(!file.exists(file.path("data/data_output", establishment_mod_fname))) {
+  
+  download.file(url = glue::glue("{remote_source}/{establishment_mod_fname}"),
+                destfile = file.path("data/data_output", establishment_mod_fname))
+}
+
+if(!file.exists(file.path("data/data_output", hurdle_mod_fname))) {
+  download.file(url = glue::glue("{remote_source}/{hurdle_mod_fname}"),
+                destfile = file.path("data/data_output", hurdle_mod_fname))
+}
+
+# If the files STILL don't exist on disk, then they weren't available from the
+# remote source, so we have to run the script to build the vital rate models
+# using the filenames declared above
+if(!file.exists(file.path("data/data_output", surv_mod_fname)) |
+   !file.exists(file.path("data/data_output", growth_mod_fname)) |
+   !file.exists(file.path("data/data_output", hurdle_mod_fname)) |
+   !file.exists(file.path("data/data_output", hurdle_mod_fname))) {
+  
+  source("R/CH2_VRModels_Revised.R")
+}
+
+survival_model <- readr::read_rds(file.path("data/data_output", surv_mod_fname))
+growth_model <- readRDS(file.path("data/data_output", growth_mod_fname))
+establishment_model <- readRDS(file.path("data/data_output", establishment_mod_fname))
+hurdleRep <- readRDS(file.path("data/data_output", hurdle_mod_fname))
 
 #### Bring in vital rate data --> I.df ####
-vr.mc<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/VitalRates_Microclimate.csv", stringsAsFactors = F); head(vr.mc)
+vr.mc<-read.csv(glue::glue("{remote_source}/VitalRates_Microclimate.csv"), stringsAsFactors = F); head(vr.mc)
 
 #Add in experimental metdata
-plot.chars<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/trt.plot.data.csv")
+plot.chars<-read.csv(glue::glue("{remote_source}/trt.plot.data.csv"))
 colnames(plot.chars)<-c("plot","zone","site","trt","type", "elevation");plot.chars$plot<-gsub("IL","",plot.chars$plot)
 head(plot.chars)
 
@@ -66,7 +124,7 @@ head(df)
 df <- df [, -c(12:17)]
 
 # bring in climate data averaged across all ambient plots and years
-microclimate<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/Microclimate.csv")
+microclimate<-read.csv(glue::glue("{remote_source}/Microclimate.csv"))
 head(microclimate)
 head(plot.chars)
 mc.trt<-merge(microclimate, plot.chars)
@@ -100,44 +158,6 @@ df$snow.days<- scale(df$snow.days)
 
 # scale elevation vectors
 df$elevation.s <- scale(df$elevation)
-
-##### Define Functions of vital rates ####
-#load in models
-dir.create("data/data_output", recursive = TRUE, showWarnings = FALSE)
-
-# Filenames of the 4 different vital rate models
-surv_mod_fname <- "surv_mod_sum.rds"
-growth_mod_fname <- "grwth_mod_add_ave_sum.rds"
-establishment_mod_fname <- "recruit_mod_add_ave_sum.rds"
-hurdle_mod_fname <- "hurdle_mod_add_ave_sum.rds"
-
-if(!file.exists(file.path("data/data_output", surv_mod_fname))) {
-  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{surv_mod_fname}"), 
-                destfile = file.path("data/data_output", surv_mod_fname))
-}
-survival_model <- readr::read_rds(file.path("data/data_output", surv_mod_fname))
-
-if(!file.exists(file.path("data/data_output", growth_mod_fname))) {
-  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{growth_mod_fname}"),
-                destfile = file.path("data/data_output", growth_mod_fname))
-}
-growth_model <- readRDS(file.path("data/data_output", growth_mod_fname))
-
-if(!file.exists(file.path("data/data_output", establishment_mod_fname))) {
-  
-  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{establishment_mod_fname}"),
-                destfile = file.path("data/data_output", establishment_mod_fname))
-}
-establishment_model <- readRDS(file.path("data/data_output", establishment_mod_fname))
-
-# establishment_model$data <- establishment_model$data %>% mutate(seeds.avaliable = ifelse(seeds.avaliable == 0, yes = NA, no = seeds.avaliable)) # removed zeros from $data from the model object because error trapping for number of trials became more strict in brms 2.10
-
-
-if(!file.exists(file.path("data/data_output", hurdle_mod_fname))) {
-  download.file(url = glue::glue("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/{hurdle_mod_fname}"),
-                destfile = file.path("data/data_output", hurdle_mod_fname))
-}
-hurdleRep <- readRDS(file.path("data/data_output", hurdle_mod_fname))
 
 # kernel construction
 min.size=min(df[,c("size.s", "sizeNext.s")], na.rm=T)
@@ -254,20 +274,22 @@ mcvr <-
                                            heat.s == 1 | water.s == 1 ~ "survivorship",
                                            TRUE ~ "ambient"))
 
-data.table::fwrite(x = mcvr, file = here::here("data", "data_output", "mc_vr_effects.csv"))
-
-system2(command = "aws", args = "s3 cp data/data_output/mc_vr_effects.csv s3://earthlab-mkoontz/experimental-ivesia-ipms/mc_vr_effects.csv")
+if(overwrite | !file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
+  data.table::fwrite(x = mcvr, file = here::here("data", "data_output", "mc_vr_effects.csv"))
+  
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/mc_vr_effects.csv {remote_target}/mc_vr_effects.csv"))
+}
 (end_time <- Sys.time())
 
 (base::difftime(end_time, start_time, units = "mins"))
 
 
-if(!file.exists("data/data_output/mc_vr_effects.csv")) {
+if(!file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
   
-  download.file(url = "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/mc_vr_effects.csv",
-                destfile = "data/data_output/mc_vr_effects.csv")
+  download.file(url = glue::glue("{remote_source}/{lambda_df_fname}"),
+                destfile = "data/data_output/{lambda_df_fname}")
 }
-mcvr <- readr::read_csv("data/data_output/mc_vr_effects.csv")
+mcvr <- readr::read_csv("data/data_output/{lambda_df_fname}")
 
 
 # fecundity ---------------------------------------------------------------

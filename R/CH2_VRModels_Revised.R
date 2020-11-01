@@ -2,32 +2,18 @@
 # 20201022
 
 # libraries
-library(lme4)
-library(lmerTest)
-library(ggplot2)
-library(car)
-library(popdemo)
 library(dplyr)
 library(tidyr)
-library(viridis)
-library(MASS)
-library(MuMIn)
-library(rstan)
 library(brms)
 library(purrr)
-library(broom)
-library(devtools)
-library(furrr)
-library(tidyverse)
-library(scales)
-library(cowplot)
 library(tictoc)
+library(glue)
 
 #### Bring in vital rate data --> I.df ####
-vr.mc<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/VitalRates_Microclimate.csv", stringsAsFactors = F); head(vr.mc)
+vr.mc<-read.csv(glue::glue("{remote_source}/VitalRates_Microclimate.csv"), stringsAsFactors = F); head(vr.mc)
 
 #Add in experimental metadata
-plot.chars<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/trt.plot.data.csv")
+plot.chars<-read.csv(glue::glue("{remote_source}/trt.plot.data.csv"))
 colnames(plot.chars)<-c("plot","zone","site","trt","type", "elevation");plot.chars$plot<-gsub("IL","",plot.chars$plot)
 head(plot.chars)
 
@@ -78,8 +64,7 @@ head(df)
 df <- df [, -c(12:17)]
 
 # bring in climate data averaged across all ambient plots and years
-microclimate<-read.csv("https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms/Microclimate.csv")
-
+microclimate<-read.csv(glue::glue("{remote_source}/Microclimate.csv"))
 head(microclimate)
 head(plot.chars)
 mc.trt<-merge(microclimate, plot.chars)
@@ -87,7 +72,7 @@ head(mc.trt)
 mc<-mc.trt %>%
   filter(type == "EXPERIMENTAL") %>% 
   filter(trt == "A") %>%
-#  group_by(site, year) %>% 
+  #  group_by(site, year) %>% 
   group_by(site) %>% 
   summarise(vwc = round(mean(vwc, na.rm=T), 0), degree.days = round(mean(degree.days, na.rm=T),0), snow.days = round(mean(snow.days, na.rm=T,0)))
 #mutate(year = as.factor(year))
@@ -120,10 +105,12 @@ df$elevation.s <- scale(df$elevation)
 
 #### Change to Sum coding for year ####
 contrasts(df$t1) = c("contr.sum", "contr.poly")
+
+
 #### Survival ####
 tic()
 mod = brms::brm(
-  surv ~ size.s*degree.days*heat*water*vwc + t1 + (1|site/plot),
+  surv ~ size.s*heat*water*degree.days + size.s*heat*water*vwc + t1 + (1|site/plot),
   data = df,
   family = 'bernoulli',
   prior = set_prior('normal(0, 3)'),
@@ -139,12 +126,11 @@ plot(mod)
 bayes_R2(mod) 
 pp_check(mod,nsamples = 50)
 
-#saveRDS(object = mod, file = "surv_mod.rds")
-
-dir.create("data/data_output", showWarnings = FALSE)
-readr::write_rds(x = mod, file = "data/data_output/surv_mod_sum.rds")
-
-system2(command = "aws", args = "s3 cp data/data_output/surv_mod_sum.rds s3://earthlab-mkoontz/experimental-ivesia-ipms/surv_mod_sum.rds")
+if(overwrite | !file.exists(glue::glue("data/data_output/{surv_mod_fname}"))) {
+  saveRDS(object = mod, file = glue::glue("data/data_output/{surv_mod_fname}"))
+  
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{surv_mod_fname} {remote_target}/{surv_mod_fname}"))
+}
 
 # Trying T1 (year) as a fixed effect
 # m1 = surv ~ size.s*degree.days*heat*water + size.s*vwc*heat*water + t1 + (1|site/plot)
@@ -182,21 +168,18 @@ system2(command = "aws", args = "s3 cp data/data_output/surv_mod_sum.rds s3://ea
 # model with random effects of site/plot + 1/year, no snow included, had 7 divergent transitions and 247 transitions that exceed treedepth (alpha = .99, tree depth specified to 10) took 51 mins to run
 # model with random effects of site/plot + 1/year, no snow included, had 5 divergent transitions and 0 transitions that exceed treedepth (alpha = .99, tree depth specified to 15) took 1.3 hours to run
 
-
-#saveRDS(object = mod, file = "surv_mod_add_ave.rds")
-
 #### Hurdle Reproduction ####
 df[which(df$fprobNext == 0), "seedNext"] <- 0
 tic()
-model.formula <- bf(seedNext ~ sizeNext.s*degree.days*heat*water*vwc + t1 + (1|site/plot), hu ~ sizeNext.s*degree.days*heat*water*vwc + t1 + (1|site/plot))
+model.formula <- bf(sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot), hu ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot))
 hurdleRep = brms::brm(formula = model.formula,
-  data = df,
-  family = "hurdle_poisson",
-  prior = set_prior('normal(0, 3)'),
-  iter = 1000,
-  chains = 4,
-  cores = 4,
-  control = list(adapt_delta = .85, max_treedepth = 15)
+                      data = df,
+                      family = "hurdle_poisson",
+                      prior = set_prior('normal(0, 3)'),
+                      iter = 1000,
+                      chains = 4,
+                      cores = 4,
+                      control = list(adapt_delta = .85, max_treedepth = 15)
 )
 toc()
 
@@ -205,7 +188,12 @@ plot(hurdleRep)
 bayes_R2(hurdleRep) #.67!
 pp_check(hurdleRep,nsamples = 50)
 
-saveRDS(object = hurdleRep, file = "hurdle_mod_add_ave_sum.rds")
+if(overwrite | !file.exists(glue::glue("data/data_output/{hurdle_mod_fname}"))) {
+  saveRDS(object = hurdleRep, file = glue::glue("data/data_output/{hurdle_mod_fname}"))
+  
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{hurdle_mod_fname} {remote_target}/{hurdle_mod_fname}"))
+}
+
 
 # model with fixed effect of year, random effects of site/plot, no snow, had 0 divergent transitions but 753 transition that exceed treedepth (alpha = .8, tree depth specified to 10) and  took 45 mins to run --> treedpeth issues are more a efficiency concern
 
@@ -213,7 +201,7 @@ saveRDS(object = hurdleRep, file = "hurdle_mod_add_ave_sum.rds")
 tic()
 df$sizeNext.s <- as.integer(df$sizeNext.s)
 mod.grwth = brms::brm(
-  sizeNext.s ~ size.s*degree.days*heat*water*vwc + t1 + (1|site/plot),
+  sizeNext.s ~ size.s*heat*water*degree.days + size.s*heat*water*vwc + t1 + (1|site/plot),
   data = df,
   family = 'gaussian',
   prior = set_prior('normal(0, 3)'),
@@ -235,7 +223,11 @@ pp_check(mod.grwth,nsamples = 50)
 # model with fixed effect of year, random effects of site/plot, no snow, had 0 divergent transitions and 0 transition that exceed treedepth (alpha = .99, tree depth specified to 15) and  took 42 mins to run;but had low bulkand tail effective sample size, indicating the chains need more iters
 #Final model with 1500 iters took 42 mins to run
 
-saveRDS(object = mod.grwth, file = "grwth_mod_add_ave_sum.rds")
+if(overwrite | !file.exists(glue::glue("data/data_output/{growth_mod_fname}"))) {
+  saveRDS(object = mod.grwth, file = glue::glue("data/data_output/{growth_mod_fname}"))
+  
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{growth_mod_fname} {remote_target}/{growth_mod_fname}"))
+}
 
 #### Establishment ####
 establishment.df<- 
@@ -247,15 +239,16 @@ establishment.df<-
   mutate(recruit = ifelse(recruit > seeds.avaliable, yes = seeds.avaliable, no = recruit)) 
 establishment.df
 
-recruit.mod = brms::brm(recruit | trials(seeds.avaliable) ~ degree.days*heat*water*vwc + t1 + (1|site), data = establishment.df, family = 'binomial', prior = set_prior('normal(0, 3)'), iter = 1000, chains = 4, cores = 4,
-  control = list(adapt_delta = .95, max_treedepth = 10)) 
+recruit.mod = brms::brm(recruit | trials(seeds.avaliable) ~ heat*water*degree.days + heat*water*vwc + t1 + (1|site), data = establishment.df, family = 'binomial', prior = set_prior('normal(0, 3)'), iter = 1000, chains = 4, cores = 4,
+                        control = list(adapt_delta = .95, max_treedepth = 10)) 
 
 summary(recruit.mod) 
 plot(recruit.mod)
 bayes_R2(recruit.mod) 
 pp_check(recruit.mod,nsamples = 50)
 
-saveRDS(object = recruit.mod, file = "recruit_mod_add_ave_sum.rds")
-
-#not_summed_establishment_model<-readRDS("Recruit_mod_add_ave.rds")
-#summary(not_summed_establishment_model)
+if(overwrite | !file.exists(glue::glue("data/data_output/{establishment_mod_fname}"))) {
+  saveRDS(object = recruit.mod, file = glue::glue("data/data_output/{establishment_mod_fname}"))
+  
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{establishment_mod_fname} {remote_target}/{establishment_mod_fname}"))
+}
