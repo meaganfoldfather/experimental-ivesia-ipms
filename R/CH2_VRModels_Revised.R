@@ -9,6 +9,21 @@ library(purrr)
 library(tictoc)
 library(glue)
 
+# remote_source is where we can find the vital rate models to download
+remote_source <- "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms"
+# remote_target is where we put the lambda estimates from the IPM
+remote_target <- "s3://earthlab-mkoontz/experimental-ivesia-ipms"
+
+# Desired filenames for the new vital rate models
+# If they are the same as previously-uploaded .rds files at the `remote_target`,
+# AND the `overwrite` variable is TRUE (it is FALSE by default), then those
+# vital rate models will be overwritten
+
+surv_mod_fname <- "surv_mod_additive.rds"
+growth_mod_fname <- "grwth_mod_additive.rds"
+establishment_mod_fname <- "recruit_mod_additive.rds"
+hurdle_mod_fname <- "hurdle_mod_additive.rds"
+
 #### Bring in vital rate data --> I.df ####
 vr.mc<-read.csv(glue::glue("{remote_source}/VitalRates_Microclimate.csv"), stringsAsFactors = F); head(vr.mc)
 
