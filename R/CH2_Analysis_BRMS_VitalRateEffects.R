@@ -26,7 +26,7 @@ growth_mod_fname <- "grwth_mod_additive.rds"
 establishment_mod_fname <- "recruit_mod_additive.rds"
 hurdle_mod_fname <- "hurdle_mod_additive.rds"
 
-lambda_df_fname <- "mc_vr_effects.csv"
+lambda_df_fname <- "mc_vr_effects_additive.csv"
 
 overwrite <- FALSE
 
@@ -275,9 +275,9 @@ mcvr <-
                                            TRUE ~ "ambient"))
 
 if(overwrite | !file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
-  data.table::fwrite(x = mcvr, file = here::here("data", "data_output", "mc_vr_effects.csv"))
+  data.table::fwrite(x = mcvr, file = here::here("data", "data_output", lambda_df_fname))
   
-  system2(command = "aws", args = glue::glue("s3 cp data/data_output/mc_vr_effects.csv {remote_target}/mc_vr_effects.csv"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/mc_vr_effects.csv {remote_target}/{lambda_df_fname}"))
 }
 (end_time <- Sys.time())
 
@@ -289,7 +289,7 @@ if(!file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
   download.file(url = glue::glue("{remote_source}/{lambda_df_fname}"),
                 destfile = "data/data_output/{lambda_df_fname}")
 }
-mcvr <- readr::read_csv("data/data_output/{lambda_df_fname}")
+mcvr <- readr::read_csv(glue::glue("data/data_output/{lambda_df_fname}"))
 
 
 # fecundity ---------------------------------------------------------------

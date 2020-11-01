@@ -9,6 +9,8 @@ library(purrr)
 library(tictoc)
 library(glue)
 
+overwrite <- FALSE
+
 # remote_source is where we can find the vital rate models to download
 remote_source <- "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms"
 # remote_target is where we put the lambda estimates from the IPM
@@ -267,3 +269,8 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{establishment_mod_fnam
   
   system2(command = "aws", args = glue::glue("s3 cp data/data_output/{establishment_mod_fname} {remote_target}/{establishment_mod_fname}"))
 }
+
+mod
+hurdleRep
+mod.grwth
+recruit.mod
