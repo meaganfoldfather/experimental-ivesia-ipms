@@ -277,7 +277,7 @@ mcvr <-
 if(overwrite | !file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
   data.table::fwrite(x = mcvr, file = here::here("data", "data_output", lambda_df_fname))
   
-  system2(command = "aws", args = glue::glue("s3 cp data/data_output/mc_vr_effects.csv {remote_target}/{lambda_df_fname}"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{lambda_df_fname} {remote_target}/{lambda_df_fname}"))
 }
 (end_time <- Sys.time())
 
