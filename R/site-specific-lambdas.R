@@ -277,7 +277,7 @@ site_specific_lambda <-
   site_mc_scaled %>%
   dplyr::mutate(vital_effects = list(vital_effects)) %>% 
   tidyr::unnest(vital_effects) %>%
-  mutate(lambda = furrr::future_pmap(.l = list(vwc = vwc, degree.days = degree.days), kernel_construction, y)) %>%
+  mutate(lambda = furrr::future_pmap(.l = list(vwc = vwc, degree.days = degree.days), kernel_construction, y, .options = furrr::furrr_options(seed = TRUE))) %>%
   tidyr::unnest(cols = lambda)
 
 site_specific_lambda <- 

@@ -26,10 +26,10 @@ library(cowplot)
 #### Bring in brms model for the vital rates ####
 #load in models
 # read in models
-survival_model <- readRDS("surv_mod_additive.rds")
-growth_model <- readRDS("grwth_mod_additive.rds")
-establishment_model <- readRDS("recruit_mod_additive.rds")
-hurdleRep <- readRDS("hurdle_mod_additive.rds")
+survival_model <- readRDS("data/data_output/surv_mod_additive.rds")
+growth_model <- readRDS("data/data_output/grwth_mod_additive.rds")
+establishment_model <- readRDS("data/data_output/recruit_mod_additive.rds")
+hurdleRep <- readRDS("data/data_output/hurdle_mod_additive.rds")
 
 #### make survival predictions ####
 surv_newdata <- data.frame(expand.grid(size.s = 0, degree.days = seq(to = -1.5, from = 2, length.out = 71) , vwc = seq(to = -1.5, from = 1, length.out = 51),  heat = c(0,1), water = c(0,1), t1 = NA))
@@ -41,9 +41,9 @@ dim(surv)
 #dd
 vr1 <- surv %>% 
   filter(vwc == 0) %>% 
-ggplot(aes(degree.days, Estimate, col = interaction(heat,water), fill = interaction(heat,water)))+
+  ggplot(aes(degree.days, Estimate, col = interaction(heat,water), fill = interaction(heat,water)))+
   geom_smooth(se=F, alpha = .5)+
-  geom_ribbon(aes(ymin = Estimate - Est.Error, ymax = Estimate + Est.Error), alpha = .1,lwd = .01)+
+  geom_ribbon(aes(ymin = Q2.5, ymax = Q97.5), alpha = .1,lwd = .01)+
   xlab("Degree-days")+
   ylab("Survival Probability")+
   theme_bw()+
@@ -52,20 +52,46 @@ ggplot(aes(degree.days, Estimate, col = interaction(heat,water), fill = interact
   theme(text = element_text(size=14), legend.title = element_blank())
 vr1
 
+# vr1 <- surv %>% 
+#   filter(vwc == 0) %>% 
+# ggplot(aes(degree.days, Estimate, col = interaction(heat,water), fill = interaction(heat,water)))+
+#   geom_smooth(se=F, alpha = .5)+
+#   geom_ribbon(aes(ymin = Estimate - Est.Error, ymax = Estimate + Est.Error), alpha = .1,lwd = .01)+
+#   xlab("Degree-days")+
+#   ylab("Survival Probability")+
+#   theme_bw()+
+#   scale_color_manual(values = c("black", "red", "dodgerblue", "purple"), labels = c("Ambient", "Heat", "Water", "Heat+Water"))+
+#   scale_fill_manual(values = c("black", "red", "dodgerblue", "purple"), labels = c("Ambient", "Heat", "Water", "Heat+Water"))+
+#   theme(text = element_text(size=14), legend.title = element_blank())
+# vr1
+
 #vwc
 vr2<- surv %>% 
   filter(degree.days == 0) %>% 
-ggplot(aes(vwc, Estimate, col = interaction(heat,water), fill = interaction(heat,water)))+
+  ggplot(aes(vwc, Estimate, col = interaction(heat,water), fill = interaction(heat,water)))+
   geom_smooth(se=F)+
-    geom_ribbon(aes(ymin = Estimate - Est.Error, ymax = Estimate + Est.Error), alpha = .1, lwd = .1)+
+  geom_ribbon(aes(ymin = Q2.5, ymax = Q97.5), alpha = .1, lwd = .1)+
   xlab("Soil Moisture")+
   ylab("Survival Probability")+
   theme_bw()+
   scale_color_manual(values = c("black", "red", "dodgerblue", "purple"), labels = c("Ambient", "Heat", "Water", "Heat+Water"))+
-    scale_fill_manual(values = c("black", "red", "dodgerblue", "purple"), labels = c("Ambient", "Heat", "Water", "Heat+Water"))+
+  scale_fill_manual(values = c("black", "red", "dodgerblue", "purple"), labels = c("Ambient", "Heat", "Water", "Heat+Water"))+
   theme(text = element_text(size=14), legend.title = element_blank())
 vr2
 plot_grid(vr1, vr2, nrow = 2)
+# vr2<- surv %>% 
+#   filter(degree.days == 0) %>% 
+# ggplot(aes(vwc, Estimate, col = interaction(heat,water), fill = interaction(heat,water)))+
+#   geom_smooth(se=F)+
+#     geom_ribbon(aes(ymin = Estimate - Est.Error, ymax = Estimate + Est.Error), alpha = .1, lwd = .1)+
+#   xlab("Soil Moisture")+
+#   ylab("Survival Probability")+
+#   theme_bw()+
+#   scale_color_manual(values = c("black", "red", "dodgerblue", "purple"), labels = c("Ambient", "Heat", "Water", "Heat+Water"))+
+#     scale_fill_manual(values = c("black", "red", "dodgerblue", "purple"), labels = c("Ambient", "Heat", "Water", "Heat+Water"))+
+#   theme(text = element_text(size=14), legend.title = element_blank())
+# vr2
+# plot_grid(vr1, vr2, nrow = 2)
 
 #### make growth predictions ####
 grwth_newdata <- data.frame(expand.grid(size.s = 0, degree.days = seq(to = -1.5, from = 2, length.out = 71) , vwc = seq(to = -1.5, from = 1, length.out = 51) ,heat = c(0,1), water = c(0,1),t1 = NA))

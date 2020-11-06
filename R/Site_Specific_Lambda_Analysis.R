@@ -9,6 +9,7 @@ library(furrr)
 library(glue)
 library(ggplot2)
 library(data.table)
+library(tidybayes)
 
 dir.create("data/data_output", recursive = TRUE, showWarnings = FALSE)
 
@@ -37,6 +38,41 @@ if(!file.exists(file.path("data/data_output", lambda_df_fname))) {
   download.file(url = glue::glue("{remote_source}/{lambda_df_fname}"), 
                 destfile = file.path("data/data_output", lambda_df_fname))}
 
-site_lambdas <- read.csv(file.path("data/data_output", lambda_df_fname))
-head(site_lambdas)  
-  
+# Get site elevation
+plot.chars <- read.csv(glue::glue("{remote_source}/trt.plot.data.csv"))
+colnames(plot.chars) <- tolower(colnames(plot.chars))
+
+site_chars <- 
+  plot.chars %>% 
+  dplyr::group_by(site) %>% 
+  dplyr::summarize(elevation = mean(elevation))
+
+site_lambdas <- 
+  readr::read_csv(file.path("data/data_output", lambda_df_fname)) %>% 
+  dplyr::left_join(site_chars, by = "site") %>% 
+  tibble::as_tibble() %>% 
+  dplyr::mutate(elevation = factor(elevation, levels = sort(unique(elevation))))
+
+site_lambdas <-
+  site_lambdas %>% 
+  dplyr::mutate(trt = case_when(heat.s + heat.g + heat.f > 0 ~ "heat",
+                                water.s + water.g + water.f > 0 ~ "water",
+                                heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
+                                TRUE ~ "ambient")) %>% 
+  dplyr::mutate(manipulated_vr = case_when(heat.f == 1 | water.f == 1 ~ "fecundity",
+                                           heat.g == 1 | water.g == 1 ~ "growth",
+                                           heat.s == 1 | water.s == 1 ~ "survivorship"))
+
+# site-specific lambdas per elevation
+ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = lambda, y = elevation, fill = manipulated_vr)) +
+  tidybayes::stat_halfeye()
+
+ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = lambda, y = elevation)) +
+  tidybayes::stat_halfeye() +
+  facet_wrap(facets = "manipulated_vr")
+
+### change in lambdas by manipulating individual vital rates
+ggplot(site_lambdas %>% dplyr::filter(!(manipulated_vr %in% c("heat", "water", "ambient", "hw"))), aes(x = lambda, y = elevation)) +
+  tidybayes::stat_halfeye() +
+  facet_wrap(facets = "manipulated_vr")
+
