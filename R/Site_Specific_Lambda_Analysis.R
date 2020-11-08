@@ -51,25 +51,45 @@ site_lambdas <-
   readr::read_csv(file.path("data/data_output", lambda_df_fname)) %>% 
   dplyr::left_join(site_chars, by = "site") %>% 
   tibble::as_tibble() %>% 
+  dplyr::mutate(elevation = round(elevation,digits = 0)) %>% 
   dplyr::mutate(elevation = factor(elevation, levels = sort(unique(elevation))))
+
 
 site_lambdas <-
   site_lambdas %>% 
-  dplyr::mutate(trt = case_when(heat.s + heat.g + heat.f > 0 ~ "heat",
-                                water.s + water.g + water.f > 0 ~ "water",
-                                heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
-                                TRUE ~ "ambient")) %>% 
-  dplyr::mutate(manipulated_vr = case_when(heat.f == 1 | water.f == 1 ~ "fecundity",
+  dplyr::mutate(manipulated_vr = case_when(heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
+                                           heat.f == 1 & heat.g == 1 & heat.s == 1 ~ "heat",
+                                           water.f == 1 & water.g == 1 & water.s == 1 ~ "water",
+                                           heat.f == 1 | water.f == 1 ~ "fecundity",
                                            heat.g == 1 | water.g == 1 ~ "growth",
-                                           heat.s == 1 | water.s == 1 ~ "survivorship"))
+                                           heat.s == 1 | water.s == 1 ~ "survivorship",
+                                           TRUE ~ "ambient"))
+  
+  # dplyr::mutate(trt = case_when(heat.s + heat.g + heat.f > 0 ~ "heat",
+  #                               water.s + water.g + water.f > 0 ~ "water",
+  #                               heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
+  #                               TRUE ~ "ambient")) %>% 
+  # dplyr::mutate(manipulated_vr = case_when(heat.f == 1 | water.f == 1 ~ "fecundity",
+  #                                          heat.g == 1 | water.g == 1 ~ "growth",
+  #                                          heat.s == 1 | water.s == 1 ~ "survivorship"))
 
 # site-specific lambdas per elevation
+ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("ambient")), aes(x = elevation, y = lambda)) +
+  tidybayes::stat_halfeye(limits = c(0,2))+
+  theme_classic()
+  
 ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = lambda, y = elevation, fill = manipulated_vr)) +
   tidybayes::stat_halfeye()
 
 ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = lambda, y = elevation)) +
   tidybayes::stat_halfeye() +
   facet_wrap(facets = "manipulated_vr")
+
+ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = elevation, y = lambda, col = manipulated_vr)) +
+  tidybayes::stat_halfeye() +
+  facet_wrap(facets = "manipulated_vr")+
+  theme_classic()
+
 
 ### change in lambdas by manipulating individual vital rates
 ggplot(site_lambdas %>% dplyr::filter(!(manipulated_vr %in% c("heat", "water", "ambient", "hw"))), aes(x = lambda, y = elevation)) +
