@@ -74,3 +74,16 @@ ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "am
   theme_classic()
 
 #### Contrasts ####
+contrasts <- mcvr_lambda %>% 
+  filter(manipulated_vr %in% c("ambient", "heat", "water", "hw")) %>% 
+  mutate(heat = ifelse(heat.f == 1, yes = 1, no = 0), water = ifelse(water.f == 1, yes = 1, no = 0)) %>% 
+   dplyr::select(-heat.f:-water.s, - manipulated_vr) %>% 
+  unite(trt, heat, water) %>% 
+  nest(lambda = lambda) %>% 
+  pivot_wider(names_from = trt, values_from = lambda) %>%
+  unnest(cols = c(`0_0`, `1_0`, `0_1`, `1_1`),names_sep = "_") %>% 
+  rename(ambient = `0_0_lambda`, heat = `1_0_lambda`, water = `0_1_lambda`, hw = `1_1_lambda`) %>%
+  mutate(heat_effect = (heat+hw)-(ambient+water), water_effect = (water+hw) - (ambient + heat), hw_effect = hw - (1/3)*(ambient + heat + water)) %>% 
+  dplyr::select(-heat, -water, -ambient, -hw) %>% 
+  pivot_longer(names_to = "trt", values_to = "delta_lambda", -(degree.days:vwc)) 
+contrasts
