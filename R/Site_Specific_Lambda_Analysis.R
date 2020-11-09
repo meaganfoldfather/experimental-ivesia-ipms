@@ -311,7 +311,7 @@ colnames(all)[1] <- "num.id"
 head(all)
 
 density <- all %>% 
-  group_by(site, t1) %>%
+  group_by(site, t1, plot) %>%
   summarize(density = n_distinct(num.id)) %>% 
   group_by(site) %>% 
   summarize(density = round(mean(density))) 
