@@ -64,7 +64,7 @@ site_lambdas <-
 ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("ambient")), aes(x = elevation, y = lambda)) +
   tidybayes::stat_halfeye(limits = c(0,2))+
   theme_classic()
-  
+
 ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = lambda, y = elevation, fill = manipulated_vr)) +
   tidybayes::stat_halfeye()
 
@@ -74,16 +74,56 @@ ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "am
   theme_classic()
 
 #### Contrasts ####
-contrasts <- mcvr_lambda %>% 
+
+#### Contrasts of experimental treatments against ambient ####
+contrasts <- 
+  site_lambdas %>% 
   filter(manipulated_vr %in% c("ambient", "heat", "water", "hw")) %>% 
-  mutate(heat = ifelse(heat.f == 1, yes = 1, no = 0), water = ifelse(water.f == 1, yes = 1, no = 0)) %>% 
-   dplyr::select(-heat.f:-water.s, - manipulated_vr) %>% 
-  unite(trt, heat, water) %>% 
-  nest(lambda = lambda) %>% 
-  pivot_wider(names_from = trt, values_from = lambda) %>%
-  unnest(cols = c(`0_0`, `1_0`, `0_1`, `1_1`),names_sep = "_") %>% 
-  rename(ambient = `0_0_lambda`, heat = `1_0_lambda`, water = `0_1_lambda`, hw = `1_1_lambda`) %>%
-  mutate(heat_effect = (heat+hw)-(ambient+water), water_effect = (water+hw) - (ambient + heat), hw_effect = hw - (1/3)*(ambient + heat + water)) %>% 
+  mutate(heat = ifelse(heat.f == 1, yes = 1, no = 0), 
+         water = ifelse(water.f == 1, yes = 1, no = 0)) %>% 
+  dplyr::select(-heat.f:-water.s, - manipulated_vr) %>% 
+  tidyr::unite(trt, heat, water) %>% 
+  tidyr::nest(lambda = lambda) %>% 
+  tidyr::pivot_wider(names_from = trt, values_from = lambda) %>%
+  tidyr::unnest(cols = c(`0_0`, `1_0`, `0_1`, `1_1`), names_sep = "_") %>% 
+  dplyr::rename(ambient = `0_0_lambda`, 
+                heat = `1_0_lambda`, 
+                water = `0_1_lambda`, 
+                hw = `1_1_lambda`) %>%
+  dplyr::mutate(heat_effect = (heat+hw)-(ambient+water), 
+                water_effect = (water+hw) - (ambient + heat), 
+                hw_effect = hw - (1/3)*(ambient + heat + water)) %>% 
   dplyr::select(-heat, -water, -ambient, -hw) %>% 
-  pivot_longer(names_to = "trt", values_to = "delta_lambda", -(degree.days:vwc)) 
+  tidyr::pivot_longer(names_to = "trt", values_to = "delta_lambda", -(site:elevation)) 
+
 contrasts
+
+contrasts_summary <-
+  contrasts %>% 
+  dplyr::group_by(site, elevation, degree.days, vwc, trt) %>% 
+  dplyr::summarize(mean_delta_lambda = mean(delta_lambda),
+                   median_delta_lambda = median(delta_lambda),
+                   lwr95 = quantile(delta_lambda, probs = 0.025),
+                   upr95 = quantile(delta_lambda, probs = 0.975),
+                   mass_over_under_zero = ifelse(mean_delta_lambda < 0,
+                                                 yes = ecdf(delta_lambda)(0),
+                                                 no = 1 - ecdf(delta_lambda)(0)),
+                   sig_lambda = ifelse(mass_over_under_zero < 0.95,
+                                       yes = NA, no = mean_delta_lambda), 
+                   n=n())
+
+
+ggplot(contrasts_summary, aes(x = elevation, y = mean_delta_lambda)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95, ymax = upr95)) +
+  facet_wrap(.~trt, nrow = 1, labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER")))+
+  theme_bw() +
+  theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
+  xlab("Elevation")+
+  ylab(expression(paste(Delta, lambda)))+
+  geom_hline(yintercept = 0, color = "grey")
+
+
+#### Contrasts of simulated treatment on individual vital rates against ambient ####
+
+
