@@ -65,15 +65,10 @@ ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("ambient")), aes(x =
   tidybayes::stat_halfeye(limits = c(0,2))+
   theme_classic()
 
-ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = lambda, y = elevation, fill = manipulated_vr)) +
-  tidybayes::stat_halfeye()
-
 ggplot(site_lambdas %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = elevation, y = lambda, col = manipulated_vr)) +
   tidybayes::stat_halfeye() +
   facet_wrap(facets = "manipulated_vr")+
   theme_classic()
-
-#### Contrasts ####
 
 #### Contrasts of experimental treatments against ambient ####
 contrasts <- 
@@ -121,11 +116,11 @@ ggplot(contrasts_summary, aes(x = elevation, y = mean_delta_lambda)) +
   theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
   xlab("Elevation")+
   ylab(expression(paste(Delta, lambda)))+
-  geom_hline(yintercept = 0, color = "grey")
+  geom_hline(yintercept = 0, color = "grey")+
+  ggtitle("A")
 
 
-#### Contrasts of simulated treatment on individual vital rates against ambient ####
-
+#### Contrasts of simulated treatment on individual vital rates against ambientt
 # fecundity ---------------------------------------------------------------
 
 trt_on_fecundity <- 
@@ -305,4 +300,35 @@ ggplot(all_contrasts, aes(x = elevation, y = mean_delta_lambda)) +
   theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
   xlab("Elevation")+
   ylab(expression(paste(Delta, lambda)))+
-  geom_hline(yintercept = 0, color = "grey")
+  geom_hline(yintercept = 0, color = "grey")+
+  ggtitle("B")
+
+
+#### Lambda across population density ####
+# calculate average density across the plots
+all<- read.csv(glue::glue("{remote_source}/VitalRates_Microclimate.csv"), stringsAsFactors = F)
+colnames(all)[1] <- "num.id"
+head(all)
+
+density <- all %>% 
+  group_by(site, t1) %>%
+  summarize(density = n_distinct(num.id)) %>% 
+  group_by(site) %>% 
+  summarize(density = round(mean(density))) 
+density
+
+# merge density with 'site_lambda
+site_density <-left_join(site_lambdas, density)
+
+# make plot
+ggplot(site_density %>% dplyr::filter(manipulated_vr %in% c("heat", "water", "ambient", "hw")), aes(x = density, y = lambda, color = manipulated_vr)) +
+  tidybayes::stat_halfeye() +
+  xlab("Site Density")+
+  ylab(expression(lambda))+
+  geom_hline(yintercept = 1, color = "grey")+
+  scale_color_manual(values=c("black", "red" ,"purple", "dodgerblue"))+
+   theme_classic()+
+    theme(text = element_text(size=16), axis.text.x = element_text(angle = 90), legend.position = "none")+
+  facet_wrap(facets = "manipulated_vr", labeller = labeller(manipulated_vr = c(ambient = "AMBIENT", heat = "HEAT", water = "WATER", hw = "HEAT + WATER")))
+    
+ 
