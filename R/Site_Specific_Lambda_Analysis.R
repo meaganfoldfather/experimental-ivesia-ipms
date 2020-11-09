@@ -126,4 +126,183 @@ ggplot(contrasts_summary, aes(x = elevation, y = mean_delta_lambda)) +
 
 #### Contrasts of simulated treatment on individual vital rates against ambient ####
 
+# fecundity ---------------------------------------------------------------
 
+trt_on_fecundity <- 
+  site_lambdas %>% 
+  dplyr::filter(manipulated_vr %in% c("fecundity", "ambient")) %>% 
+  dplyr::select(site, elevation, manipulated_vr, degree.days, vwc, heat.f, water.f, lambda)
+
+fecundity_contrasts <- 
+  trt_on_fecundity %>% 
+  dplyr::select(-manipulated_vr) %>% 
+  dplyr::group_by(site, elevation) %>% 
+  dplyr::group_split() %>% 
+  lapply(FUN = function(x) {
+    x <- 
+      x %>% 
+      dplyr::rename(heat = starts_with("heat"),
+                    water = starts_with("water"))
+    
+    my_df <- 
+      tibble::tibble(site = unique(x$site),
+                     elevation = unique(x$elevation),
+                     degree.days = unique(x$degree.days), 
+                     vwc = unique(x$vwc), 
+                     h = x$lambda[x$heat == 1 & x$water == 0],
+                     w = x$lambda[x$heat == 0 & x$water == 1],
+                     hw = x$lambda[x$heat == 1 & x$water == 1],
+                     a = x$lambda[x$heat == 0 & x$water == 0],
+                     heat_effect = ((h + hw) / 2) - ((w + a) / 2),
+                     water_effect = ((w + hw) / 2) - ((h + a) / 2),
+                     hw_effect = (hw) - ((h + w + a) / 3)) %>% 
+      dplyr::select(site, elevation, degree.days, vwc, dplyr::ends_with("effect")) %>% 
+      tidyr::pivot_longer(cols = c(heat_effect, water_effect, hw_effect),
+                          names_to = "trt",
+                          values_to = "delta_lambda") %>% 
+      dplyr::group_by(site, elevation, degree.days, vwc, trt) %>% 
+      dplyr::summarize(mean_delta_lambda = mean(delta_lambda),
+                       lwr95 = quantile(delta_lambda, probs = 0.025),
+                       upr95 = quantile(delta_lambda, probs = 0.975),
+                      .groups = "keep")
+  }) %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::mutate(manipulated_vr = "fecundity") %>% 
+  dplyr::select(site, elevation, degree.days, vwc, manipulated_vr, tidyr::everything())
+
+
+ggplot(fecundity_contrasts, aes(x = elevation, y = mean_delta_lambda)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95, ymax = upr95)) +
+  facet_wrap(.~trt, nrow = 1, labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER")))+
+  theme_bw() +
+  theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
+  xlab("Elevation")+
+  ylab(expression(paste(Delta, lambda)))+
+  geom_hline(yintercept = 0, color = "grey")
+
+
+# survivorship --------------------------------------------------------
+trt_on_survivorship <- 
+  site_lambdas %>% 
+  dplyr::filter(manipulated_vr %in% c("survivorship", "ambient")) %>% 
+  dplyr::select(site, elevation, manipulated_vr, degree.days, vwc, heat.s, water.s, lambda)
+
+survivorship_contrasts <- 
+  trt_on_survivorship %>% 
+  dplyr::select(-manipulated_vr) %>% 
+  dplyr::group_by(site, elevation) %>% 
+  dplyr::group_split() %>% 
+  lapply(FUN = function(x) {
+    x <- 
+      x %>% 
+      dplyr::rename(heat = starts_with("heat"),
+                    water = starts_with("water"))
+    
+    my_df <- 
+      tibble::tibble(site = unique(x$site),
+                     elevation = unique(x$elevation),
+                     degree.days = unique(x$degree.days), 
+                     vwc = unique(x$vwc), 
+                     h = x$lambda[x$heat == 1 & x$water == 0],
+                     w = x$lambda[x$heat == 0 & x$water == 1],
+                     hw = x$lambda[x$heat == 1 & x$water == 1],
+                     a = x$lambda[x$heat == 0 & x$water == 0],
+                     heat_effect = ((h + hw) / 2) - ((w + a) / 2),
+                     water_effect = ((w + hw) / 2) - ((h + a) / 2),
+                     hw_effect = (hw) - ((h + w + a) / 3)) %>% 
+      dplyr::select(site, elevation, degree.days, vwc, dplyr::ends_with("effect")) %>% 
+      tidyr::pivot_longer(cols = c(heat_effect, water_effect, hw_effect),
+                          names_to = "trt",
+                          values_to = "delta_lambda") %>% 
+      dplyr::group_by(site, elevation, degree.days, vwc, trt) %>% 
+      dplyr::summarize(mean_delta_lambda = mean(delta_lambda),
+                       lwr95 = quantile(delta_lambda, probs = 0.025),
+                       upr95 = quantile(delta_lambda, probs = 0.975),
+                       .groups = "keep")
+  }) %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::mutate(manipulated_vr = "survivorship") %>% 
+  dplyr::select(site, elevation, degree.days, vwc, manipulated_vr, tidyr::everything())
+
+
+ggplot(survivorship_contrasts, aes(x = elevation, y = mean_delta_lambda)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95, ymax = upr95)) +
+  facet_wrap(.~trt, nrow = 1, labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER")))+
+  theme_bw() +
+  theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
+  xlab("Elevation")+
+  ylab(expression(paste(Delta, lambda)))+
+  geom_hline(yintercept = 0, color = "grey")
+
+# growth -------------------------------------------------------------
+
+trt_on_growth <- 
+  site_lambdas %>% 
+  dplyr::filter(manipulated_vr %in% c("growth", "ambient")) %>% 
+  dplyr::select(site, elevation, manipulated_vr, degree.days, vwc, heat.g, water.g, lambda)
+
+growth_contrasts <- 
+  trt_on_growth %>% 
+  dplyr::select(-manipulated_vr) %>% 
+  dplyr::group_by(site, elevation) %>% 
+  dplyr::group_split() %>% 
+  lapply(FUN = function(x) {
+    x <- 
+      x %>% 
+      dplyr::rename(heat = starts_with("heat"),
+                    water = starts_with("water"))
+    
+    my_df <- 
+      tibble::tibble(site = unique(x$site),
+                     elevation = unique(x$elevation),
+                     degree.days = unique(x$degree.days), 
+                     vwc = unique(x$vwc), 
+                     h = x$lambda[x$heat == 1 & x$water == 0],
+                     w = x$lambda[x$heat == 0 & x$water == 1],
+                     hw = x$lambda[x$heat == 1 & x$water == 1],
+                     a = x$lambda[x$heat == 0 & x$water == 0],
+                     heat_effect = ((h + hw) / 2) - ((w + a) / 2),
+                     water_effect = ((w + hw) / 2) - ((h + a) / 2),
+                     hw_effect = (hw) - ((h + w + a) / 3)) %>% 
+      dplyr::select(site, elevation, degree.days, vwc, dplyr::ends_with("effect")) %>% 
+      tidyr::pivot_longer(cols = c(heat_effect, water_effect, hw_effect),
+                          names_to = "trt",
+                          values_to = "delta_lambda") %>% 
+      dplyr::group_by(site, elevation, degree.days, vwc, trt) %>% 
+      dplyr::summarize(mean_delta_lambda = mean(delta_lambda),
+                       lwr95 = quantile(delta_lambda, probs = 0.025),
+                       upr95 = quantile(delta_lambda, probs = 0.975),
+                       .groups = "keep")
+  }) %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::mutate(manipulated_vr = "growth") %>% 
+  dplyr::select(site, elevation, degree.days, vwc, manipulated_vr, tidyr::everything())
+
+
+ggplot(growth_contrasts, aes(x = elevation, y = mean_delta_lambda)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95, ymax = upr95)) +
+  facet_wrap(.~trt, nrow = 1, labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER")))+
+  theme_bw() +
+  theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
+  xlab("Elevation")+
+  ylab(expression(paste(Delta, lambda)))+
+  geom_hline(yintercept = 0, color = "grey")
+
+
+# all contrasts -------------------------------------------------------
+
+all_contrasts <-
+  rbind(fecundity_contrasts, survivorship_contrasts, growth_contrasts)
+
+ggplot(all_contrasts, aes(x = elevation, y = mean_delta_lambda)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95, ymax = upr95)) +
+  facet_grid(rows = vars(manipulated_vr), cols = vars(trt), labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER")))+
+  theme_bw() +
+  theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
+  xlab("Elevation")+
+  ylab(expression(paste(Delta, lambda)))+
+  geom_hline(yintercept = 0, color = "grey")
