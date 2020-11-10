@@ -69,6 +69,20 @@ growth_model <- readRDS(file.path("data/data_output", growth_mod_fname))
 establishment_model <- readRDS(file.path("data/data_output", establishment_mod_fname))
 hurdleRep <- readRDS(file.path("data/data_output", hurdle_mod_fname))
 
+# R squared of vital rate models
+bayes_R2(survival_model) 
+bayes_R2(growth_model)
+bayes_R2(hurdleRep)
+bayes_R2(establishment_model)
+
+plot1 <- pp_check(survival_model, nsamples = 100); plot1
+plot2 <- pp_check(growth_model, nsamples = 100); plot2
+plot3 <- pp_check(hurdleRep, nsamples = 100); plot3
+plot4 <- pp_check(establishment_model, nsamples = 100); plot4
+
+library(cowplot)
+plot_grid(plot1, plot2, plot3, plot4, labels = c("A", "B", "C", "D"))
+
 #### Bring in vital rate data --> I.df ####
 vr.mc<-read.csv(glue::glue("{remote_source}/VitalRates_Microclimate.csv"), stringsAsFactors = F); head(vr.mc)
 
