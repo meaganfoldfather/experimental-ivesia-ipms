@@ -1,6 +1,6 @@
-# Figure 5 showing 
-
-# Figures 3; lambda across ambient microclimate gradient of degree days and VWC
+# Figure 5a showing the effect of experimental treatments on lambda
+# Figure 5b showing the contrasts (delta lambda) between experimental treatments
+# and ambient
 
 #### Dependencies ####
 library(dplyr)
@@ -19,16 +19,6 @@ library(broom)
 remote_source <- "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms"
 # remote_target is where we put the lambda estimates from the IPM
 remote_target <- "s3://earthlab-mkoontz/experimental-ivesia-ipms"
-
-# Desired filenames for the new vital rate models
-# If they are the same as previously-uploaded .rds files at the `remote_target`,
-# AND the `overwrite` variable is TRUE (it is FALSE by default), then those
-# vital rate models will be overwritten
-
-# surv_mod_fname <- "surv_mod_additive.rds"
-# growth_mod_fname <- "grwth_mod_additive.rds"
-# establishment_mod_fname <- "recruit_mod_additive.rds"
-# hurdle_mod_fname <- "hurdle_mod_additive.rds"
 
 lambda_df_fname <- "mc_vr_effects_additive.csv"
 

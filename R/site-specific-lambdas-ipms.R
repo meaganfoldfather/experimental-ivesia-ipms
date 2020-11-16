@@ -1,8 +1,5 @@
 # Get estimated lambda for each site (using the site-specific microclimate variables)
 
-#Intent: Analysis for CH2 - Analysis to look at Specific Responses of Each Vital Rate to the Experimental Manipulations
-#Date Last Edited: 20190915
-
 #### Library ####
 library(dplyr)
 library(brms)
@@ -246,6 +243,7 @@ kernel_construction <- function(x, degree.days = 0, vwc = 0, heat.s = 0, water.s
   return(lambda)
 }
 
+
 #### end IPM infrastructure setup
 
 #### get site-level microclimate
@@ -257,7 +255,7 @@ site_mc_scaled <-
 #Treatment Effects Across Climatic Gradients
 # Running on the Alien with 10 workers on 2020-05-06; runtime = 
 
-plan(multiprocess, workers = 10)
+plan(multiprocess, workers = 6)
 start_time <- Sys.time()
 start_time
 
@@ -273,11 +271,22 @@ vital_effects <-
   rbind(c(0, 1, 0, 1, 0, 1)) %>% # water every vital rate
   rbind(c(1, 1, 1, 1, 1, 1)) # heat and water every vital rate
 
+# Now create a dataframe that includes the site-specific microclimate as well
+# as the experimental effects we want to implement on lambda (as defined by
+# the vital_effects matrix above)
+# Then, we iterate over each row using future_pmap() [using dplyr::select(., -site)
+# to remove the site variable from the values in the row being passed to the
+# kernel_construction() function] and build the IPM to get lambda for that
+# particular combination of microclimate and experimental treatment (either 
+# applied to all vital rates at once, or one at a time). The result is a very
+# large dataframe with 2000 values of lambda per combination of microclimate
+# variables (of which there is one combo per site) and per experimental manipulation
+
 site_specific_lambda <- 
   site_mc_scaled %>%
   dplyr::mutate(vital_effects = list(vital_effects)) %>% 
   tidyr::unnest(vital_effects) %>%
-  mutate(lambda = furrr::future_pmap(.l = list(vwc = vwc, degree.days = degree.days), kernel_construction, y, .options = furrr::furrr_options(seed = TRUE))) %>%
+  mutate(lambda = furrr::future_pmap(.l = dplyr::select(., -site), kernel_construction, y, .options = furrr::furrr_options(seed = TRUE))) %>%
   tidyr::unnest(cols = lambda)
 
 site_specific_lambda <- 
