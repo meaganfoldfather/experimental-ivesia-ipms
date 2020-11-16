@@ -3,11 +3,14 @@
 
 #### Library ####
 library(dplyr)
+library(ggplot2)
 library(brms)
 library(purrr)
 library(furrr)
 library(data.table)
 library(glue)
+library(tidyr)
+library(cowplot)
 
 dir.create("data/data_output", recursive = TRUE, showWarnings = FALSE)
 
@@ -165,13 +168,35 @@ size_vec <- c(df$size, df$sizeNext)
 df$size.s <- (df$size - mean(size_vec, na.rm=T))/sd(size_vec, na.rm=T)
 df$sizeNext.s <- (df$sizeNext - mean(size_vec, na.rm=T))/sd(size_vec, na.rm=T)
 
-# scale climate vectors
-df$vwc<- scale(df$vwc)
-df$degree.days <- scale(df$degree.days)
-df$snow.days<- scale(df$snow.days)
+# scale climate vectors but preserve raw values in a different column
+# also scale elevation vectors
+df <-
+  df %>% 
+  dplyr::mutate(vwc_raw = vwc,
+                degree.days_raw = degree.days,
+                snow.days_raw = snow.days,
+                vwc = scale(vwc),
+                degree.days = scale(degree.days),
+                snow.days = scale(snow.days),
+                elevation.s = scale(elevation))
 
-# scale elevation vectors
-df$elevation.s <- scale(df$elevation)
+site_metadata <-
+  df %>% 
+  dplyr::filter(type == "EXPERIMENTAL") %>% 
+  dplyr::filter(trt == "A") %>%
+  dplyr::group_by(site) %>% 
+  dplyr::summarise(vwc_raw = round(mean(vwc_raw, na.rm = TRUE), digits = 0), 
+                   degree.days_raw = round(mean(degree.days_raw, na.rm = TRUE), digits = 0), 
+                   snow.days_raw = round(mean(snow.days_raw, na.rm = TRUE), digits = 0), 
+                   elevation_raw = round(mean(elevation, na.rm = TRUE), digits = 0),
+                   vwc_scaled = mean(vwc),
+                   degree.days_scaled = mean(degree.days),
+                   snow.days_scaled = mean(snow.days),
+                   elevation_scaled = mean(elevation.s)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(site.num = as.numeric(factor(site, levels = c("GATEDOS", "DITCH", "DITCHDOS", "BAR", "BARDOS", "PLAT", "NASTRES", "NASA", "QUATRO"))))
+
+readr::write_csv(x = site_metadata, file = "data/data_output/site_metadata.csv")
 
 # kernel construction
 min.size=min(df[,c("size.s", "sizeNext.s")], na.rm=T)
@@ -297,26 +322,47 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
 
 (base::difftime(end_time, start_time, units = "mins"))
 
-
+#### Begin working with the lambda estimates; put into separate script
 if(!file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
   
   download.file(url = glue::glue("{remote_source}/{lambda_df_fname}"),
-                destfile = "data/data_output/{lambda_df_fname}")
+                destfile = glue::glue("data/data_output/{lambda_df_fname}"))
 }
 mcvr <- readr::read_csv(glue::glue("data/data_output/{lambda_df_fname}"))
 
+# Ambient
 
+ambient <- 
+  mcvr %>% 
+  filter(manipulated_vr == "ambient") %>% 
+  dplyr::select(manipulated_vr, degree.days, vwc, lambda) %>% 
+  dplyr::group_by(degree.days, vwc) %>% 
+  dplyr::summarize(mean_lambda = mean(lambda),
+                   lwr = quantile(lambda, probs = 0.025),
+                   upr = quantile(lambda, probs = 0.975))
+
+# Two kinds of contrasts: 1) effect of each treatment (3 panels) and 2) effect of each
+# treatment on lambda through each vital rate (9 panels)
+
+# Effect of each treatment
+trt_heat <- 
+  mcvr %>% 
+  dplyr::filter(manipulated_vr %in% c("heat", "ambient")) %>% 
+  dplyr::select(manipulated_vr, degree.days, vwc, heat.f, water.f, lambda)
+
+
+# Effect of each treatment on lambda through each vital rate
 # fecundity ---------------------------------------------------------------
 
 trt_on_fecundity <- 
   mcvr %>% 
   dplyr::filter(manipulated_vr %in% c("fecundity", "ambient")) %>% 
-  dplyr::select(manipulated_vr, degree.days, vwc, snow.days, heat.f, water.f, lambda)
+  dplyr::select(manipulated_vr, degree.days, vwc, heat.f, water.f, lambda)
 
 fecundity_contrasts <- 
   trt_on_fecundity %>% 
   dplyr::select(-manipulated_vr) %>% 
-  base::split(.[, c("degree.days", "vwc", "snow.days")]) %>% 
+  base::split(.[, c("degree.days", "vwc")]) %>% 
   lapply(FUN = function(x) {
     x <- 
       x %>% 
@@ -326,7 +372,6 @@ fecundity_contrasts <-
     my_df <- 
       tibble(degree.days = unique(x$degree.days), 
              vwc = unique(x$vwc), 
-             snow.days = unique(x$snow.days), 
              h = x$lambda[x$heat == 1 & x$water == 0],
              w = x$lambda[x$heat == 0 & x$water == 1],
              hw = x$lambda[x$heat == 1 & x$water == 1],
@@ -334,16 +379,18 @@ fecundity_contrasts <-
              contrast_h = ((h + hw) / 2) - ((w + a) / 2),
              contrast_w = ((w + hw) / 2) - ((h + a) / 2),
              contrast_hw = (hw) - ((h + w + a) / 3)) %>% 
-      dplyr::select(degree.days, vwc, snow.days, starts_with("contrast")) %>% 
-      pivot_longer(cols = c(contrast_h, contrast_w, contrast_hw),
-                   names_to = "trt_contrast",
-                   values_to = "delta_lambda") %>% 
-      dplyr::group_by(degree.days, vwc, snow.days, trt_contrast) %>% 
+      dplyr::select(degree.days, vwc, starts_with("contrast")) %>% 
+      tidyr::pivot_longer(cols = c(contrast_h, contrast_w, contrast_hw),
+                          names_to = "trt_contrast",
+                          values_to = "delta_lambda") %>% 
+      dplyr::group_by(degree.days, vwc, trt_contrast) %>% 
       dplyr::summarize(delta_lambda_mean = mean(delta_lambda),
                        delta_lambda_lwr = quantile(delta_lambda, probs = 0.025),
                        delta_lambda_upr = quantile(delta_lambda, probs = 0.975))
   }) %>% 
-  bind_rows()
+  bind_rows() %>% 
+  dplyr::mutate(manipulated_vr = "fecundity")
+
 
 
 # growth ------------------------------------------------------------------
@@ -351,13 +398,13 @@ fecundity_contrasts <-
 trt_on_growth <- 
   mcvr %>% 
   filter(manipulated_vr %in% c("growth", "ambient")) %>% 
-  dplyr::select(manipulated_vr, degree.days, vwc, snow.days, heat.g, water.g, lambda)
+  dplyr::select(manipulated_vr, degree.days, vwc, heat.g, water.g, lambda)
 
 
 growth_contrasts <- 
   trt_on_growth %>% 
   dplyr::select(-manipulated_vr) %>% 
-  base::split(.[, c("degree.days", "vwc", "snow.days")]) %>% 
+  base::split(.[, c("degree.days", "vwc")]) %>% 
   lapply(FUN = function(x) {
     x <- 
       x %>% 
@@ -367,7 +414,6 @@ growth_contrasts <-
     my_df <- 
       tibble(degree.days = unique(x$degree.days), 
              vwc = unique(x$vwc), 
-             snow.days = unique(x$snow.days), 
              h = x$lambda[x$heat == 1 & x$water == 0],
              w = x$lambda[x$heat == 0 & x$water == 1],
              hw = x$lambda[x$heat == 1 & x$water == 1],
@@ -375,16 +421,18 @@ growth_contrasts <-
              contrast_h = ((h + hw) / 2) - ((w + a) / 2),
              contrast_w = ((w + hw) / 2) - ((h + a) / 2),
              contrast_hw = (hw) - ((h + w + a) / 3)) %>% 
-      dplyr::select(degree.days, vwc, snow.days, starts_with("contrast")) %>% 
+      dplyr::select(degree.days, vwc, starts_with("contrast")) %>% 
       pivot_longer(cols = c(contrast_h, contrast_w, contrast_hw),
                    names_to = "trt_contrast",
                    values_to = "delta_lambda") %>% 
-      dplyr::group_by(degree.days, vwc, snow.days, trt_contrast) %>% 
+      dplyr::group_by(degree.days, vwc, trt_contrast) %>% 
       dplyr::summarize(delta_lambda_mean = mean(delta_lambda),
                        delta_lambda_lwr = quantile(delta_lambda, probs = 0.025),
                        delta_lambda_upr = quantile(delta_lambda, probs = 0.975))
   }) %>% 
-  bind_rows()
+  bind_rows() %>% 
+  dplyr::mutate(manipulated_vr = "growth")
+
 
 
 # survivorship ------------------------------------------------------------
@@ -392,13 +440,13 @@ growth_contrasts <-
 trt_on_survivorship <- 
   mcvr %>% 
   filter(manipulated_vr %in% c("survivorship", "ambient")) %>% 
-  dplyr::select(manipulated_vr, degree.days, vwc, snow.days, heat.s, water.s, lambda)
+  dplyr::select(manipulated_vr, degree.days, vwc, heat.s, water.s, lambda)
 
 
 survivorship_contrasts <- 
   trt_on_survivorship %>% 
   dplyr::select(-manipulated_vr) %>% 
-  base::split(.[, c("degree.days", "vwc", "snow.days")]) %>% 
+  base::split(.[, c("degree.days", "vwc")]) %>% 
   lapply(FUN = function(x) {
     x <- 
       x %>% 
@@ -408,7 +456,6 @@ survivorship_contrasts <-
     my_df <- 
       tibble(degree.days = unique(x$degree.days), 
              vwc = unique(x$vwc), 
-             snow.days = unique(x$snow.days), 
              h = x$lambda[x$heat == 1 & x$water == 0],
              w = x$lambda[x$heat == 0 & x$water == 1],
              hw = x$lambda[x$heat == 1 & x$water == 1],
@@ -416,98 +463,95 @@ survivorship_contrasts <-
              contrast_h = ((h + hw) / 2) - ((w + a) / 2),
              contrast_w = ((w + hw) / 2) - ((h + a) / 2),
              contrast_hw = (hw) - ((h + w + a) / 3)) %>% 
-      dplyr::select(degree.days, vwc, snow.days, starts_with("contrast")) %>% 
+      dplyr::select(degree.days, vwc, starts_with("contrast")) %>% 
       pivot_longer(cols = c(contrast_h, contrast_w, contrast_hw),
                    names_to = "trt_contrast",
                    values_to = "delta_lambda") %>% 
-      dplyr::group_by(degree.days, vwc, snow.days, trt_contrast) %>% 
+      dplyr::group_by(degree.days, vwc, trt_contrast) %>% 
       dplyr::summarize(delta_lambda_mean = mean(delta_lambda),
                        delta_lambda_lwr = quantile(delta_lambda, probs = 0.025),
                        delta_lambda_upr = quantile(delta_lambda, probs = 0.975))
   }) %>% 
-  bind_rows()
+  bind_rows() %>% 
+  dplyr::mutate(manipulated_vr = "survivorship")
 
 
 # figures -----------------------------------------------------------------
 
+# Ambient
+
+
+ambient_gg <- 
+  ggplot(ambient, aes(x = degree.days, y = vwc, fill = mean_lambda)) +
+  geom_raster() +
+  scale_fill_gradient2(midpoint = 1) +
+  coord_fixed() +
+  theme_minimal() +
+  labs(fill = expression(lambda)) +
+  labs(x = "Degree days",
+       y = "VWC")
+
+ambient_gg
 
 # fecundity manipulation; degree days, vwc --------------------------------
 
-ggplot(fecundity_contrasts %>% filter(snow.days == 0), aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
+fecundity_gg <- 
+  ggplot(fecundity_contrasts, aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
+  facet_grid(cols = vars(trt_contrast), labeller = labeller(trt_contrast = c(contrast_h = "heat", contrast_w = "water", contrast_hw = "heat+water"))) +
   coord_fixed() +
-  theme_minimal()
+  theme_minimal() +
+  labs(fill = expression(Delta ~ lambda)) +
+  labs(x = "Degree days",
+       y = "Fecundity\n\nVWC")
 
-# fecundity manipulation; snow days, vwc --------------------------------
-
-ggplot(fecundity_contrasts %>% filter(degree.days == 0), aes(x = snow.days, y = vwc, fill = delta_lambda_mean)) +
-  geom_raster() +
-  scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
-  coord_fixed() +
-  theme_minimal()
-
-# fecundity manipulation; snow days, degree.days --------------------------------
-
-ggplot(fecundity_contrasts %>% filter(vwc == 0), aes(x = degree.days, y = snow.days, fill = delta_lambda_mean)) +
-  geom_raster() +
-  scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
-  coord_fixed() +
-  theme_minimal()
 
 # growth manipulation; degree days, vwc --------------------------------
 
-ggplot(growth_contrasts %>% filter(snow.days == 0), aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
+growth_gg <- 
+  ggplot(growth_contrasts, aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
+  facet_grid(cols = vars(trt_contrast), labeller = labeller(trt_contrast = c(contrast_h = "heat", contrast_w = "water", contrast_hw = "heat+water"))) +
   coord_fixed() +
-  theme_minimal()
+  theme_minimal() +
+  labs(fill = expression(Delta ~ lambda)) +
+  labs(x = "Degree days",
+       y = "Growth\n\nVWC")
 
-# growth manipulation; snow days, vwc --------------------------------
 
-ggplot(growth_contrasts %>% filter(degree.days == 0), aes(x = snow.days, y = vwc, fill = delta_lambda_mean)) +
-  geom_raster() +
-  scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
-  coord_fixed() +
-  theme_minimal()
-
-# growth manipulation; snow days, degree.days --------------------------------
-
-ggplot(growth_contrasts %>% filter(vwc == 0), aes(x = degree.days, y = snow.days, fill = delta_lambda_mean)) +
-  geom_raster() +
-  scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
-  coord_fixed() +
-  theme_minimal()
+growth_gg
 
 # survivorship manipulation; degree days, vwc --------------------------------
 
-ggplot(survivorship_contrasts %>% filter(snow.days == 0), aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
+survivorship_gg <-
+  ggplot(survivorship_contrasts, aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
+  facet_grid(cols = vars(trt_contrast), labeller = labeller(trt_contrast = c(contrast_h = "heat", contrast_w = "water", contrast_hw = "heat+water"))) +
   coord_fixed() +
-  theme_minimal()
+  theme_minimal() +
+  labs(fill = expression(Delta ~ lambda)) +
+  labs(x = "Degree days",
+       y = "Survivorship\n\nVWC")
 
-# survivorship manipulation; snow days, vwc --------------------------------
 
-ggplot(survivorship_contrasts %>% filter(degree.days == 0), aes(x = snow.days, y = vwc, fill = delta_lambda_mean)) +
+### All contrasts together
+
+all_contrasts <- rbind(fecundity_contrasts, growth_contrasts, survivorship_contrasts)
+
+ggplot(all_contrasts, aes(x = degree.days, y = vwc, fill = delta_lambda_mean)) +
   geom_raster() +
   scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
+  facet_grid(cols = vars(trt_contrast), rows = vars(manipulated_vr), labeller = labeller(trt_contrast = c(contrast_h = "heat", contrast_w = "water", contrast_hw = "heat+water"))) +
   coord_fixed() +
-  theme_minimal()
+  theme_minimal() +
+  labs(x = "Degree days",
+       y = "VWC")
 
-# survivorship manipulation; snow days, degree.days --------------------------------
+# Cowplot version to allow free variation in color per vital rate
 
-ggplot(survivorship_contrasts %>% filter(vwc == 0), aes(x = degree.days, y = snow.days, fill = delta_lambda_mean)) +
-  geom_raster() +
-  scale_fill_viridis_c() +
-  facet_grid(rows = vars(trt_contrast)) +
-  coord_fixed() +
-  theme_minimal()
+panel_plot <- cowplot::plot_grid(fecundity_gg, growth_gg, survivorship_gg, 
+                                 nrow = 3)
+panel_plot
