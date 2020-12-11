@@ -11,6 +11,8 @@ library(glue)
 
 overwrite <- FALSE
 
+dir.create("data/data_output", recursive = TRUE, showWarnings = FALSE)
+
 # remote_source is where we can find the vital rate models to download
 remote_source <- "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms"
 # remote_target is where we put the lambda estimates from the IPM
@@ -123,10 +125,9 @@ df$elevation.s <- scale(df$elevation)
 #### Change to Sum coding for year ####
 contrasts(df$t1) = c("contr.sum", "contr.poly")
 
-
 #### Survival ####
 tic()
-mod = brms::brm(
+survival_model = brms::brm(
   surv ~ size.s*heat*water*degree.days + size.s*heat*water*vwc + t1 + (1|site/plot),
   data = df,
   family = 'bernoulli',
@@ -138,13 +139,13 @@ mod = brms::brm(
 )
 toc() # 1126.566 seconds on Alien
 
-summary(mod)
-plot(mod)
-bayes_R2(mod) 
-pp_check(mod,nsamples = 50)
+summary(survival_model)
+plot(survival_model)
+bayes_R2(survival_model) 
+pp_check(survival_model, nsamples = 50)
 
 if(overwrite | !file.exists(glue::glue("data/data_output/{surv_mod_fname}"))) {
-  saveRDS(object = mod, file = glue::glue("data/data_output/{surv_mod_fname}"))
+  saveRDS(object = survival_model, file = glue::glue("data/data_output/{surv_mod_fname}"))
   
   system2(command = "aws", args = glue::glue("s3 cp data/data_output/{surv_mod_fname} {remote_target}/{surv_mod_fname}"))
 }
@@ -216,8 +217,8 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{hurdle_mod_fname}"))) 
 
 #### Growth ####
 tic()
-df$sizeNext.s <- as.integer(df$sizeNext.s)
-mod.grwth = brms::brm(
+# df$sizeNext <- as.integer(df$sizeNext)
+growth_model = brms::brm(
   sizeNext.s ~ size.s*heat*water*degree.days + size.s*heat*water*vwc + t1 + (1|site/plot),
   data = df,
   family = 'gaussian',
@@ -225,14 +226,14 @@ mod.grwth = brms::brm(
   iter = 1500,
   chains = 4,
   cores = 4,
-  control = list(adapt_delta = .99, max_treedepth = 15)
+  control = list(adapt_delta = .991, max_treedepth = 15)
 )
 toc()
 
-summary(mod.grwth)
-plot(mod.grwth)
-bayes_R2(mod.grwth) 
-pp_check(mod.grwth,nsamples = 50)
+summary(growth_model)
+plot(growth_model)
+bayes_R2(growth_model) 
+pp_check(growth_model,nsamples = 50)
 
 # model with fixed effect of year, random effects of site/plot, no snow, had 5 divergent transitions and 0  transition that exceed treedepth (alpha = .8, tree depth specified to 10) and  took 12 mins to run;also had low bulk and tail effective sample size, indicating the chains need more iters
 # model with fixed effect of year, random effects of site/plot, no snow, had 0 divergent transitions and 5 transition that exceed treedepth (alpha = .9, tree depth specified to 10) and  took 14 mins to run;also had low bulk effective sample size, indicating the chains need more iters
@@ -241,7 +242,7 @@ pp_check(mod.grwth,nsamples = 50)
 #Final model with 1500 iters took 42 mins to run
 
 if(overwrite | !file.exists(glue::glue("data/data_output/{growth_mod_fname}"))) {
-  saveRDS(object = mod.grwth, file = glue::glue("data/data_output/{growth_mod_fname}"))
+  saveRDS(object = growth_model, file = glue::glue("data/data_output/{growth_mod_fname}"))
   
   system2(command = "aws", args = glue::glue("s3 cp data/data_output/{growth_mod_fname} {remote_target}/{growth_mod_fname}"))
 }
@@ -256,21 +257,21 @@ establishment.df<-
   mutate(recruit = ifelse(recruit > seeds.avaliable, yes = seeds.avaliable, no = recruit)) 
 establishment.df
 
-recruit.mod = brms::brm(recruit | trials(seeds.avaliable) ~ heat*water*degree.days + heat*water*vwc + t1 + (1|site), data = establishment.df, family = 'binomial', prior = set_prior('normal(0, 3)'), iter = 1000, chains = 4, cores = 4,
+establishment_model = brms::brm(recruit | trials(seeds.avaliable) ~ heat*water*degree.days + heat*water*vwc + t1 + (1|site), data = establishment.df, family = 'binomial', prior = set_prior('normal(0, 3)'), iter = 1000, chains = 4, cores = 4,
                         control = list(adapt_delta = .95, max_treedepth = 10)) 
 
-summary(recruit.mod) 
-plot(recruit.mod)
-bayes_R2(recruit.mod) 
-pp_check(recruit.mod,nsamples = 50)
+summary(establishment_model) 
+plot(establishment_model)
+bayes_R2(establishment_model) 
+pp_check(establishment_model, nsamples = 50)
 
 if(overwrite | !file.exists(glue::glue("data/data_output/{establishment_mod_fname}"))) {
-  saveRDS(object = recruit.mod, file = glue::glue("data/data_output/{establishment_mod_fname}"))
+  saveRDS(object = establishment_model, file = glue::glue("data/data_output/{establishment_mod_fname}"))
   
   system2(command = "aws", args = glue::glue("s3 cp data/data_output/{establishment_mod_fname} {remote_target}/{establishment_mod_fname}"))
 }
 
-mod
+survival_model
 hurdleRep
-mod.grwth
-recruit.mod
+growth_model
+establishment_model
