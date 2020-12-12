@@ -73,17 +73,10 @@ establishment_model <- readRDS(file.path("data/data_output", establishment_mod_f
 hurdleRep <- readRDS(file.path("data/data_output", hurdle_mod_fname))
 
 # R squared of vital rate models
-bayes_R2(survival_model) 
-bayes_R2(growth_model)
-bayes_R2(hurdleRep)
-bayes_R2(establishment_model)
-
-plot1 <- pp_check(survival_model, nsamples = 100); plot1
-plot2 <- pp_check(growth_model, nsamples = 100) + coord_cartesian(xlim = c(0, 150)); plot2
-plot3 <- pp_check(hurdleRep, nsamples = 100); plot3
-plot4 <- pp_check(establishment_model, nsamples = 100); plot4
-
-plot_grid(plot1, plot2, plot3, plot4, labels = c("A", "B", "C", "D"))
+# bayes_R2(survival_model) 
+# bayes_R2(growth_model)
+# bayes_R2(hurdleRep)
+# bayes_R2(establishment_model)
 
 #### Bring in vital rate data --> I.df ####
 vr.mc<-read.csv(glue::glue("{remote_source}/VitalRates_Microclimate.csv"), stringsAsFactors = F); head(vr.mc)
@@ -290,7 +283,7 @@ kernel_construction <- function(x, degree.days = 0, vwc = 0, heat.s = 0, water.s
 #Treatment Effects Across Climatic Gradients
 # Running on the Alien with 10 workers on 2020-05-06; runtime = 
 
-plan(multiprocess, workers = 10)
+plan(multiprocess, workers = 5)
 start_time <- Sys.time()
 start_time
 
@@ -313,8 +306,12 @@ mc_vr_effects <-
   microclimate_effects %>% 
   dplyr::mutate(vital_effects = list(vital_effects)) %>% 
   tidyr::unnest(vital_effects) %>% 
+  dplyr::slice(1:5) %>% 
   mutate(lambda = furrr::future_pmap(., kernel_construction, y)) %>%
   tidyr::unnest()
+(end_time <- Sys.time())
+
+(base::difftime(end_time, start_time, units = "mins"))
 
 mcvr <- 
   mc_vr_effects %>% 
@@ -329,7 +326,7 @@ mcvr <-
 if(overwrite | !file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
   data.table::fwrite(x = mcvr, file = here::here("data", "data_output", lambda_df_fname))
   
-  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{lambda_df_fname} {remote_target}/{lambda_df_fname}"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{lambda_df_fname} {remote_target}/{lambda_df_fname} --acl public-read"))
 }
 (end_time <- Sys.time())
 

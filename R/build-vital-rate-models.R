@@ -157,7 +157,7 @@ pp_check(survival_model, nsamples = 50)
 if(overwrite | !file.exists(glue::glue("data/data_output/{surv_mod_fname}"))) {
   saveRDS(object = survival_model, file = glue::glue("data/data_output/{surv_mod_fname}"))
   
-  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{surv_mod_fname} {remote_target}/{surv_mod_fname}"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{surv_mod_fname} {remote_target}/{surv_mod_fname} --acl public-read"))
 }
 
 # Trying T1 (year) as a fixed effect
@@ -219,7 +219,7 @@ pp_check(hurdleRep,nsamples = 50)
 if(overwrite | !file.exists(glue::glue("data/data_output/{hurdle_mod_fname}"))) {
   saveRDS(object = hurdleRep, file = glue::glue("data/data_output/{hurdle_mod_fname}"))
   
-  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{hurdle_mod_fname} {remote_target}/{hurdle_mod_fname}"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{hurdle_mod_fname} {remote_target}/{hurdle_mod_fname} --acl public-read"))
 }
 
 
@@ -255,7 +255,7 @@ growth_pp_check + coord_cartesian(xlim = c(0, 100))
 if(overwrite | !file.exists(glue::glue("data/data_output/{growth_mod_fname}"))) {
   saveRDS(object = growth_model, file = glue::glue("data/data_output/{growth_mod_fname}"))
   
-  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{growth_mod_fname} {remote_target}/{growth_mod_fname}"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{growth_mod_fname} {remote_target}/{growth_mod_fname} --acl public-read"))
 }
 
 #### Establishment ####
@@ -279,7 +279,7 @@ pp_check(establishment_model, nsamples = 50)
 if(overwrite | !file.exists(glue::glue("data/data_output/{establishment_mod_fname}"))) {
   saveRDS(object = establishment_model, file = glue::glue("data/data_output/{establishment_mod_fname}"))
   
-  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{establishment_mod_fname} {remote_target}/{establishment_mod_fname}"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/{establishment_mod_fname} {remote_target}/{establishment_mod_fname} --acl public-read"))
 }
 
 survival_model
