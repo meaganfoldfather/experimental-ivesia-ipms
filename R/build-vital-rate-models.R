@@ -8,6 +8,7 @@ library(brms)
 library(purrr)
 library(tictoc)
 library(glue)
+library(ggplot2)
 
 overwrite <- FALSE
 
@@ -197,14 +198,14 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{surv_mod_fname}"))) {
 # model with random effects of site/plot + 1/year, no snow included, had 5 divergent transitions and 0 transitions that exceed treedepth (alpha = .99, tree depth specified to 15) took 1.3 hours to run
 
 #### Hurdle Reproduction ####
-set.seed(1353)
+set.seed(1541)
 df[which(df$fprobNext == 0), "seedNext"] <- 0
 (start <- Sys.time())
 model.formula <- bf(seedNext ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot), 
                     hu ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot))
 hurdleRep = brms::brm(formula = model.formula,
                       data = df,
-                      family = "hurdle_poisson",
+                      family = "hurdle_negbinomial",
                       prior = set_prior('normal(0, 3)'),
                       iter = 1000,
                       chains = 4,
@@ -217,7 +218,7 @@ hurdleRep = brms::brm(formula = model.formula,
 summary(hurdleRep)
 plot(hurdleRep)
 bayes_R2(hurdleRep) #.67!
-pp_check(hurdleRep,nsamples = 50)
+pp_check(hurdleRep, nsamples = 50) + coord_cartesian(xlim = c(0, 50))
 
 if(overwrite | !file.exists(glue::glue("data/data_output/{hurdle_mod_fname}"))) {
   saveRDS(object = hurdleRep, file = glue::glue("data/data_output/{hurdle_mod_fname}"))
