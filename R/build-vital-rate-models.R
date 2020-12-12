@@ -197,9 +197,11 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{surv_mod_fname}"))) {
 # model with random effects of site/plot + 1/year, no snow included, had 5 divergent transitions and 0 transitions that exceed treedepth (alpha = .99, tree depth specified to 15) took 1.3 hours to run
 
 #### Hurdle Reproduction ####
+set.seed(1353)
 df[which(df$fprobNext == 0), "seedNext"] <- 0
-tic()
-model.formula <- bf(seedNext ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot), hu ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot))
+(start <- Sys.time())
+model.formula <- bf(seedNext ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot), 
+                    hu ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot))
 hurdleRep = brms::brm(formula = model.formula,
                       data = df,
                       family = "hurdle_poisson",
@@ -207,9 +209,10 @@ hurdleRep = brms::brm(formula = model.formula,
                       iter = 1000,
                       chains = 4,
                       cores = 4,
-                      control = list(adapt_delta = .85, max_treedepth = 15)
+                      control = list(adapt_delta = 0.9)
 )
-toc()
+
+(difftime(time1 = Sys.time(), time2 = start, units = "mins"))
 
 summary(hurdleRep)
 plot(hurdleRep)
