@@ -64,7 +64,7 @@ if(!file.exists(file.path("data/data_output", surv_mod_fname)) |
    !file.exists(file.path("data/data_output", hurdle_mod_fname)) |
    !file.exists(file.path("data/data_output", hurdle_mod_fname))) {
   
-  source("R/CH2_VRModels_Revised.R")
+  source("R/build-vital-rate-models.R")
 }
 
 survival_model <- readr::read_rds(file.path("data/data_output", surv_mod_fname))
@@ -79,11 +79,10 @@ bayes_R2(hurdleRep)
 bayes_R2(establishment_model)
 
 plot1 <- pp_check(survival_model, nsamples = 100); plot1
-plot2 <- pp_check(growth_model, nsamples = 100); plot2
+plot2 <- pp_check(growth_model, nsamples = 100) + coord_cartesian(xlim = c(0, 150)); plot2
 plot3 <- pp_check(hurdleRep, nsamples = 100); plot3
 plot4 <- pp_check(establishment_model, nsamples = 100); plot4
 
-library(cowplot)
 plot_grid(plot1, plot2, plot3, plot4, labels = c("A", "B", "C", "D"))
 
 #### Bring in vital rate data --> I.df ####
@@ -160,13 +159,26 @@ head(df); dim(df)
 df$site <- as.factor(df$site)
 df$plot <- as.factor(df$plot)
 
-#filter out rows with 0 for size or size next
+# filter out rows with 0 for size or size next
+# Just a couple plants had no leaves when sampled, but were still alive.
+# unclear what this really means biologically (perhaps just an artifact of
+# when sampling occurred during the season) so we drop them
 df <- df[-which(df$size == 0),]
 df <- df[-which(df$sizeNext == 0),]
 
+# One plant (2118.OS.15.0) was recorded as having a sizeNext of 0.3 in t1=2015
+# which is almost certainly a typo (should almost certainly be 3, since previous
+# size was 3). We will drop this row, and the entry for this plant in the next
+# year, when the error propagates and the "size" column then becomes 0.3.
+df <- df[-which(df$size == 0.3), ]
+df <- df[-which(df$sizeNext == 0.3), ]
+
 size_vec <- c(df$size, df$sizeNext)
-df$size.s <- (df$size - mean(size_vec, na.rm=T))/sd(size_vec, na.rm=T)
-df$sizeNext.s <- (df$sizeNext - mean(size_vec, na.rm=T))/sd(size_vec, na.rm=T)
+mean_size <- mean(size_vec, na.rm = TRUE)
+sd_size <- sd(size_vec, na.rm = TRUE)
+
+df$size.s <- (df$size - mean_size) / sd_size
+df$sizeNext.s <- (df$sizeNext - mean_size)/ sd_size
 
 # scale climate vectors but preserve raw values in a different column
 # also scale elevation vectors
@@ -217,8 +229,9 @@ s.x=function(x, degree.days = 0, vwc = 0, heat = 0, water = 0) {
 # 2. growth function
 g.yx=function(xp,x,degree.days = 0, vwc = 0, heat = 0, water = 0) {
   new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
-  sizeNext.s <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE) 
+  sizeNext <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE) 
   
+  sizeNext.s <- (sizeNext - mean_size) / sd_size
   
   growth <- apply(sizeNext.s, MARGIN = 2, FUN = function(sizeNext.s_column) {approxfun(density(sizeNext.s_column))(xp)})
   # if the probability is so small that it doesn't exist in our empirical

@@ -106,9 +106,19 @@ head(df); dim(df)
 df$site <- as.factor(df$site)
 df$plot <- as.factor(df$plot)
 
-#filter out rows with 0 for size or size next
+# filter out rows with 0 for size or size next
+# Just a couple plants had no leaves when sampled, but were still alive.
+# unclear what this really means biologically (perhaps just an artifact of
+# when sampling occurred during the season) so we drop them
 df <- df[-which(df$size == 0),]
 df <- df[-which(df$sizeNext == 0),]
+
+# One plant (2118.OS.15.0) was recorded as having a sizeNext of 0.3 in t1=2015
+# which is almost certainly a typo (should almost certainly be 3, since previous
+# size was 3). We will drop this row, and the entry for this plant in the next
+# year, when the error propagates and the "size" column then becomes 0.3.
+df <- df[-which(df$size == 0.3), ]
+df <- df[-which(df$sizeNext == 0.3), ]
 
 size_vec <- c(df$size, df$sizeNext)
 df$size.s <- (df$size - mean(size_vec, na.rm=T))/sd(size_vec, na.rm=T)
@@ -189,7 +199,7 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{surv_mod_fname}"))) {
 #### Hurdle Reproduction ####
 df[which(df$fprobNext == 0), "seedNext"] <- 0
 tic()
-model.formula <- bf(sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot), hu ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot))
+model.formula <- bf(seedNext ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot), hu ~ sizeNext.s*heat*water*degree.days + sizeNext.s*heat*water*vwc + t1 + (1|site/plot))
 hurdleRep = brms::brm(formula = model.formula,
                       data = df,
                       family = "hurdle_poisson",
@@ -216,24 +226,25 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{hurdle_mod_fname}"))) 
 # model with fixed effect of year, random effects of site/plot, no snow, had 0 divergent transitions but 753 transition that exceed treedepth (alpha = .8, tree depth specified to 10) and  took 45 mins to run --> treedpeth issues are more a efficiency concern
 
 #### Growth ####
-tic()
-# df$sizeNext <- as.integer(df$sizeNext)
+set.seed(822)
+(start <- Sys.time())
 growth_model = brms::brm(
-  sizeNext.s ~ size.s*heat*water*degree.days + size.s*heat*water*vwc + t1 + (1|site/plot),
+  sizeNext ~ size.s*heat*water*degree.days + size.s*heat*water*vwc + t1 + (1|site/plot),
   data = df,
-  family = 'gaussian',
+  family = 'negbinomial',
   prior = set_prior('normal(0, 3)'),
-  iter = 1500,
+  iter = 1000,
   chains = 4,
   cores = 4,
-  control = list(adapt_delta = .991, max_treedepth = 15)
+  control = list(adapt_delta = 0.9)
 )
-toc()
+difftime(time1 = Sys.time(), time2 = start, units = "mins")
 
 summary(growth_model)
 plot(growth_model)
 bayes_R2(growth_model) 
-pp_check(growth_model,nsamples = 50)
+growth_pp_check <- pp_check(growth_model)
+growth_pp_check + coord_cartesian(xlim = c(0, 100))
 
 # model with fixed effect of year, random effects of site/plot, no snow, had 5 divergent transitions and 0  transition that exceed treedepth (alpha = .8, tree depth specified to 10) and  took 12 mins to run;also had low bulk and tail effective sample size, indicating the chains need more iters
 # model with fixed effect of year, random effects of site/plot, no snow, had 0 divergent transitions and 5 transition that exceed treedepth (alpha = .9, tree depth specified to 10) and  took 14 mins to run;also had low bulk effective sample size, indicating the chains need more iters
