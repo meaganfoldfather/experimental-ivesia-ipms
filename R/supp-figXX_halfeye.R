@@ -77,12 +77,6 @@ if(!file.exists(file.path("data/data_output", surv_mod_fname)) |
 }
 ####
 
-
-
-
-
-
-
 survival_model <- readr::read_rds(file.path("data/data_output", surv_mod_fname))
 growth_model <- readRDS(file.path("data/data_output", growth_mod_fname))
 establishment_model <- readRDS(file.path("data/data_output", establishment_mod_fname))
