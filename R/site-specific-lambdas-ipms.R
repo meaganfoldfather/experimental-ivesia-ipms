@@ -146,13 +146,26 @@ head(df); dim(df)
 df$site <- as.factor(df$site)
 df$plot <- as.factor(df$plot)
 
-#filter out rows with 0 for size or size next
+# filter out rows with 0 for size or size next
+# Just a couple plants had no leaves when sampled, but were still alive.
+# unclear what this really means biologically (perhaps just an artifact of
+# when sampling occurred during the season) so we drop them
 df <- df[-which(df$size == 0),]
 df <- df[-which(df$sizeNext == 0),]
 
+# One plant (2118.OS.15.0) was recorded as having a sizeNext of 0.3 in t1=2015
+# which is almost certainly a typo (should almost certainly be 3, since previous
+# size was 3). We will drop this row, and the entry for this plant in the next
+# year, when the error propagates and the "size" column then becomes 0.3.
+df <- df[-which(df$size == 0.3), ]
+df <- df[-which(df$sizeNext == 0.3), ]
+
 size_vec <- c(df$size, df$sizeNext)
-df$size.s <- (df$size - mean(size_vec, na.rm=T))/sd(size_vec, na.rm=T)
-df$sizeNext.s <- (df$sizeNext - mean(size_vec, na.rm=T))/sd(size_vec, na.rm=T)
+mean_size <- mean(size_vec, na.rm = TRUE)
+sd_size <- sd(size_vec, na.rm = TRUE)
+
+df$size.s <- (df$size - mean_size) / sd_size
+df$sizeNext.s <- (df$sizeNext - mean_size)/ sd_size
 
 # scale climate vectors
 df$vwc<- scale(df$vwc)
@@ -186,8 +199,9 @@ s.x=function(x, degree.days = 0, vwc = 0, heat = 0, water = 0) {
 # 2. growth function
 g.yx=function(xp,x,degree.days = 0, vwc = 0, heat = 0, water = 0) {
   new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
-  sizeNext.s <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE) 
+  sizeNext <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE) 
   
+  sizeNext.s <- (sizeNext - mean_size) / sd_size
   
   growth <- apply(sizeNext.s, MARGIN = 2, FUN = function(sizeNext.s_column) {approxfun(density(sizeNext.s_column))(xp)})
   # if the probability is so small that it doesn't exist in our empirical
