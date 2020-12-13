@@ -75,7 +75,7 @@ if(!file.exists(file.path("data/data_output", surv_mod_fname)) |
    !file.exists(file.path("data/data_output", hurdle_mod_fname)) |
    !file.exists(file.path("data/data_output", hurdle_mod_fname))) {
   
-  source("R/CH2_VRModels_Revised.R")
+  source("R/build-vital-rate-models.R")
 }
 
 survival_model <- readr::read_rds(file.path("data/data_output", surv_mod_fname))
@@ -202,7 +202,7 @@ vr6
 
 
 #### Make full plot ####
-pdf(file = "vr.pdf")
+pdf(file = "figs/supp-figXX-effect-of-microclimate-on-vital-rates.png")
 prow <- plot_grid(
 vr1 + theme(legend.position="none"),
 vr2 + theme(legend.position="none"),
