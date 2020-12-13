@@ -114,8 +114,8 @@ ggsave(establishment_traceplot, filename = "figs/supp-figXX-establishment-model-
 
 ### recruitment model
 hurdleRep_traceplot_hu <- traceplot(hurdleRep, par_filter = "hu", n_pars = 26)
-ggsave(hurdleRep_traceplot_hu, filename = "figs/supp-figXX-hurdleRep-model-hu-traceplot.pdf", width = 10, height = 12, units = "in")
+ggsave(hurdleRep_traceplot_hu, filename = "figs/supp-figXX-hurdleRep-model-hu-traceplot.png", width = 10, height = 12, units = "in")
 
 hurdleRep_traceplot_not_hu <- traceplot(hurdleRep, par_filter = "hu", n_pars = 28, negate = TRUE)
-ggsave(hurdleRep_traceplot_not_hu, filename = "figs/supp-figXX-hurdleRep-model-not-hu-traceplot.pdf", width = 10, height = 12, units = "in")
+ggsave(hurdleRep_traceplot_not_hu, filename = "figs/supp-figXX-hurdleRep-model-not-hu-traceplot.png", width = 10, height = 12, units = "in")
 
