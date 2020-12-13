@@ -99,7 +99,7 @@ contrasts_summary <-
 head(contrasts_summary)
 range(contrasts_summary$delta_lambda)
 
-Fig5A <- 
+Fig4A <- 
   ggplot(contrasts_summary, aes(x = degree.days, y= vwc, fill = sig_delta_lambda)) +
   geom_raster()+
   facet_grid(.~trt, labeller = labeller(trt = c(heat_effect = "HEAT", hw_effect = "HEAT+WATER", water_effect = "WATER"))) +
@@ -112,7 +112,7 @@ Fig5A <-
   ylab("Soil Moisture")+
   geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA)
 
-Fig5A
+Fig4A
 
 # Panel B
 
@@ -134,11 +134,11 @@ mcvr_lambda_summary[mcvr_lambda_summary$heat == 1 & mcvr_lambda_summary$water ==
 mcvr_lambda_summary[mcvr_lambda_summary$heat == 1 & mcvr_lambda_summary$water == 1, "trt"] <- "hw"
 mcvr_lambda_summary[mcvr_lambda_summary$heat == 0 & mcvr_lambda_summary$water == 1, "trt"] <- "water"
 
-fig5b_data <-
+fig4b_data <-
   mcvr_lambda_summary %>% 
   filter(heat == 1 | water == 1)
 
-Fig5B <-     
+Fig4B <-     
   ggplot(fig5b_data, aes(x = degree.days, y = vwc, fill = lambda)) +
   geom_raster() +
   scale_fill_gradient2(mid = "grey90", 
@@ -161,7 +161,7 @@ Fig5B <-
                              color = NA) +
   facet_grid(.~trt, labeller = labeller(trt = c(heat = "HEAT", water = "WATER", hw = "HEAT + WATER")))
 
-Fig5B
+Fig4B
 
 fig4 <- plot_grid(Fig5A, Fig5B,nrow = 2, labels = c("A", "B")) 
 
