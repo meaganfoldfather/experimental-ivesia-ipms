@@ -102,18 +102,20 @@ traceplot <- function(model, n_pars = 28, par_filter = NA_character_, negate = F
 }
 #### Survivorship model trace plot
 survival_traceplot <- traceplot(survival_model)
-ggsave(survival_traceplot, filename = "figs/supp-figXX-survival-model-traceplot.pdf", height = 12)
+ggsave(survival_traceplot, filename = "figs/supp-figXX-survival-model-traceplot.pdf", width = 10, height = 12)
 
 #### Growth model traceplot
 growth_traceplot <- traceplot(growth_model)
-ggsave(growth_traceplot, filename = "figs/supp-figXX-growth-model-traceplot.pdf", height = 12)
+ggsave(growth_traceplot, filename = "figs/supp-figXX-growth-model-traceplot.pdf", width = 10, height = 12)
 
 #### Establishment model
 establishment_traceplot <- traceplot(establishment_model, n_pars = 15)
-ggsave(establishment_traceplot, filename = "figs/supp-figXX-establishment-model-traceplot.pdf", height = 12)
+ggsave(establishment_traceplot, filename = "figs/supp-figXX-establishment-model-traceplot.pdf", width = 10, height = 8)
 
 ### recruitment model
 hurdleRep_traceplot_hu <- traceplot(hurdleRep, par_filter = "hu", n_pars = 26)
+ggsave(hurdleRep_traceplot_hu, filename = "figs/supp-figXX-hurdleRep-model-hu-traceplot.pdf", width = 10, height = 12)
 
-hurdleRep_traceplot_not_hu <- traceplot(hurdleRep, par_filter = "hu", n_pars = 36, negate = TRUE)
-ggsave(establishment_traceplot, filename = "figs/supp-figXX-establishment-model-traceplot.pdf", height = 12)
+hurdleRep_traceplot_not_hu <- traceplot(hurdleRep, par_filter = "hu", n_pars = 28, negate = TRUE)
+ggsave(hurdleRep_traceplot_not_hu, filename = "figs/supp-figXX-hurdleRep-model-not-hu-traceplot.pdf", width = 10, height = 12)
+
