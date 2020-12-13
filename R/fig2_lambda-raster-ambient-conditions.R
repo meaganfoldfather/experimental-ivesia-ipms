@@ -54,19 +54,6 @@ mcvr_lambda_summary$heat <- factor(mcvr_lambda_summary$heat)
 mcvr_lambda_summary$water <- factor(mcvr_lambda_summary$water)
 
 # make  lines around ambient cells
-# r <- 
-#   mcvr_lambda_summary %>% 
-#   dplyr::ungroup() %>% 
-#   dplyr::filter(heat == 0 & water == 0) %>% 
-#   dplyr::mutate(expanding = ifelse(sig_lambda > 1, yes = 1, no = 0)) %>% 
-#   dplyr::select(degree.days, vwc, expanding) %>% 
-#   raster::rasterFromXYZ()
-# 
-# crs(r) <- sf::st_crs(4326)
-# 
-# pp <- raster::rasterToPolygons(r, dissolve = TRUE)
-# outline <- sf::st_as_sf(pp) %>% dplyr::filter(expanding == 1)
-
 r <- 
   mcvr_lambda_summary %>% 
   dplyr::ungroup() %>% 
@@ -84,7 +71,7 @@ outline <- sf::st_as_sf(pp) %>% dplyr::filter(stable == 1)
 site_metadata <- readr::read_csv(file = "data/data_output/site_metadata.csv")
 
 # Build the figure
-figure3 <-
+figure2 <-
   mcvr_lambda_summary %>%
   filter(heat == 0,
          water == 0) %>%
@@ -105,5 +92,6 @@ figure3 <-
   geom_text_repel(data = site_metadata, aes(degree.days_scaled, vwc_scaled, label = site.num), cex = 5) +
   geom_sf(data = outline, inherit.aes = FALSE, fill = NA, lwd = 1.5)
 
-figure3
-?ggrepel
+figure2
+
+ggsave(plot = figure2, filename = "figs/fig2-ambient-lambda-across-microclimate-conditions.png")
