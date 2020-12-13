@@ -283,7 +283,7 @@ kernel_construction <- function(x, degree.days = 0, vwc = 0, heat.s = 0, water.s
 #Treatment Effects Across Climatic Gradients
 # Running on the Alien with 10 workers on 2020-05-06; runtime = 
 
-plan(multiprocess, workers = 5)
+plan(multiprocess, workers = 10)
 start_time <- Sys.time()
 start_time
 
@@ -306,12 +306,12 @@ mc_vr_effects <-
   microclimate_effects %>% 
   dplyr::mutate(vital_effects = list(vital_effects)) %>% 
   tidyr::unnest(vital_effects) %>% 
-  dplyr::slice(1:5) %>% 
-  mutate(lambda = furrr::future_pmap(., kernel_construction, y)) %>%
-  tidyr::unnest()
-(end_time <- Sys.time())
+  mutate(lambda = furrr::future_pmap(., kernel_construction, y, .options = furrr::furrr_options(seed = TRUE))) %>%
+  tidyr::unnest(cols = c(lambda))
 
-(base::difftime(end_time, start_time, units = "mins"))
+(base::difftime(time1 = Sys.time(), time2 = start_time, units = "mins"))
+
+future::plan(strategy = "sequential")
 
 mcvr <- 
   mc_vr_effects %>% 
