@@ -12,6 +12,7 @@ library(tidyr)
 library(cowplot)
 library(raster)
 library(broom)
+library(ggrepel)
 
 # remote_source is where we can find the vital rate models to download
 remote_source <- "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms"
@@ -44,46 +45,55 @@ mcvr_lambda_summary <-
   mutate(heat = ifelse(heat.f == 1, yes = 1, no = 0), 
          water = ifelse(water.f == 1, yes = 1, no = 0)) %>% 
   group_by(degree.days, vwc, heat, water) %>% 
-  summarize(mean_lambda = mean(lambda),
-            lwr95 = quantile(lambda, probs = 0.025),
-            upr95 = quantile(lambda, probs = 0.975),
-            mass_over_under_one = ifelse(mean_lambda < 1,
-                                         yes = ecdf(lambda)(1),
-                                         no = 1 - ecdf(lambda)(1)),
-            sig_lambda = ifelse(mass_over_under_one < 0.90,
-                                yes = NA, no = mean_lambda))
+  tidybayes::median_hdci(lambda) %>% 
+  dplyr::mutate(sig_lambda = ifelse(test = .lower >= 1 | .upper <= 1,
+                                    yes = lambda,
+                                    no = NA))
 
 mcvr_lambda_summary$heat <- factor(mcvr_lambda_summary$heat)
 mcvr_lambda_summary$water <- factor(mcvr_lambda_summary$water)
 
 # make  lines around ambient cells
+# r <- 
+#   mcvr_lambda_summary %>% 
+#   dplyr::ungroup() %>% 
+#   dplyr::filter(heat == 0 & water == 0) %>% 
+#   dplyr::mutate(expanding = ifelse(sig_lambda > 1, yes = 1, no = 0)) %>% 
+#   dplyr::select(degree.days, vwc, expanding) %>% 
+#   raster::rasterFromXYZ()
+# 
+# crs(r) <- sf::st_crs(4326)
+# 
+# pp <- raster::rasterToPolygons(r, dissolve = TRUE)
+# outline <- sf::st_as_sf(pp) %>% dplyr::filter(expanding == 1)
+
 r <- 
   mcvr_lambda_summary %>% 
   dplyr::ungroup() %>% 
   dplyr::filter(heat == 0 & water == 0) %>% 
-  dplyr::mutate(expanding = ifelse(sig_lambda > 1, yes = 1, no = 0)) %>% 
-  dplyr::select(degree.days, vwc, expanding) %>% 
+  dplyr::mutate(stable = is.na(sig_lambda)) %>% 
+  dplyr::select(degree.days, vwc, stable) %>% 
   raster::rasterFromXYZ()
 
 crs(r) <- sf::st_crs(4326)
 
 pp <- raster::rasterToPolygons(r, dissolve = TRUE)
-outline <- sf::st_as_sf(pp) %>% dplyr::filter(expanding == 1)
+outline <- sf::st_as_sf(pp) %>% dplyr::filter(stable == 1)
 
 ### Get the site metadata
 site_metadata <- readr::read_csv(file = "data/data_output/site_metadata.csv")
 
 # Build the figure
-figure3 <- 
-  mcvr_lambda_summary %>% 
+figure3 <-
+  mcvr_lambda_summary %>%
   filter(heat == 0,
-         water == 0) %>% 
+         water == 0) %>%
   ggplot(aes(x = degree.days, y = vwc)) +
-  geom_raster(aes(fill = sig_lambda)) +
-  scale_fill_gradient2(mid = "grey90", 
-                       midpoint = 1, 
-                       na.value = "grey90", 
-                       high = "darkgreen", 
+  geom_raster(aes(fill = lambda)) +
+  scale_fill_gradient2(mid = "grey90",
+                       midpoint = 1,
+                       na.value = "grey90",
+                       high = "darkgreen",
                        low = "darkgoldenrod1")+
   theme_classic() +
   guides(alpha = FALSE) +
@@ -91,8 +101,9 @@ figure3 <-
   ylab("Soil Moisture (scaled)") +
   theme(text = element_text(size=16)) +
   labs(fill = expression(lambda)) +
-  geom_point(data = site_metadata, aes(degree.days_scaled, vwc_scaled), pch = 23, cex = 8) +
-  geom_text(data = site_metadata, aes(degree.days_scaled, vwc_scaled, label = site.num), cex = 5) +
-  geom_sf(data = outline, inherit.aes = FALSE, fill = NA)
+  geom_point(data = site_metadata, aes(degree.days_scaled, vwc_scaled), cex = 2) +
+  geom_text_repel(data = site_metadata, aes(degree.days_scaled, vwc_scaled, label = site.num), cex = 5) +
+  geom_sf(data = outline, inherit.aes = FALSE, fill = NA, lwd = 1.5)
 
 figure3
+?ggrepel
