@@ -269,7 +269,7 @@ site_mc_scaled <-
 #Treatment Effects Across Climatic Gradients
 # Running on the Alien with 10 workers on 2020-05-06; runtime = 
 
-plan(multiprocess, workers = 6)
+plan(multiprocess, workers = 10)
 start_time <- Sys.time()
 start_time
 
