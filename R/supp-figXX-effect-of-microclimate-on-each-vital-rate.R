@@ -202,7 +202,7 @@ vr6
 
 
 #### Make full plot ####
-pdf(file = "figs/supp-figXX-effect-of-microclimate-on-vital-rates.png")
+png(file = "figs/supp-figXX-effect-of-microclimate-on-vital-rates.png")
 prow <- plot_grid(
 vr1 + theme(legend.position="none"),
 vr2 + theme(legend.position="none"),
