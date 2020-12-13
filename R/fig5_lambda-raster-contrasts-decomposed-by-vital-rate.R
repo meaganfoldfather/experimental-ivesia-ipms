@@ -36,31 +36,33 @@ mcvr_lambda_summary <-
   mutate(heat = ifelse(heat.f == 1, yes = 1, no = 0), 
          water = ifelse(water.f == 1, yes = 1, no = 0)) %>% 
   group_by(degree.days, vwc, heat, water) %>% 
-  summarize(mean_lambda = mean(lambda),
-            lwr95 = quantile(lambda, probs = 0.025),
-            upr95 = quantile(lambda, probs = 0.975),
-            mass_over_under_one = ifelse(mean_lambda < 1,
-                                         yes = ecdf(lambda)(1),
-                                         no = 1 - ecdf(lambda)(1)),
-            sig_lambda = ifelse(mass_over_under_one < 0.90,
-                                yes = NA, no = mean_lambda))
+  tidybayes::median_hdci(lambda) %>% 
+  dplyr::mutate(sig_lambda = ifelse(test = .lower >= 1 | .upper <= 1,
+                                    yes = lambda,
+                                    no = NA))
 
 mcvr_lambda_summary$heat <- factor(mcvr_lambda_summary$heat)
 mcvr_lambda_summary$water <- factor(mcvr_lambda_summary$water)
 
 # make  lines around ambient cells
-r <- 
-  mcvr_lambda_summary %>% 
-  dplyr::ungroup() %>% 
-  dplyr::filter(heat == 0 & water == 0) %>% 
-  dplyr::mutate(expanding = ifelse(sig_lambda > 1, yes = 1, no = 0)) %>% 
-  dplyr::select(degree.days, vwc, expanding) %>% 
-  raster::rasterFromXYZ()
+make_stable_outline <- function(data, h, w) {
+  r <- 
+    data %>% 
+    dplyr::ungroup() %>% 
+    dplyr::filter(heat == h & water == w) %>% 
+    dplyr::mutate(stable = is.na(sig_lambda)) %>% 
+    dplyr::select(degree.days, vwc, stable) %>% 
+    raster::rasterFromXYZ()
+  
+  crs(r) <- sf::st_crs(4326)
+  
+  pp <- raster::rasterToPolygons(r, dissolve = TRUE)
+  stable_outline <- sf::st_as_sf(pp) %>% dplyr::filter(stable == 1)
+  
+  return(stable_outline)
+}
 
-crs(r) <- sf::st_crs(4326)
-
-pp <- raster::rasterToPolygons(r, dissolve = TRUE)
-outline <- sf::st_as_sf(pp) %>% dplyr::filter(expanding == 1)
+ambient_stable_outline <- make_stable_outline(data = mcvr_lambda_summary, h = 0, w = 0)
 
 #### End code that generates outline
 
@@ -106,86 +108,33 @@ vr_contrasts
 vr_contrasts_summary <-
   vr_contrasts %>% 
   group_by(degree.days, vwc, trt) %>% 
-  summarize(mean_delta_lambda = mean(delta_lambda),
-            median_delta_lambda = median(delta_lambda),
-            lwr95 = quantile(delta_lambda, probs = 0.025),
-            upr95 = quantile(delta_lambda, probs = 0.975),
-            mass_over_under_zero = ifelse(mean_delta_lambda < 0,
-                                          yes = ecdf(delta_lambda)(0),
-                                          no = 1 - ecdf(delta_lambda)(0)),
-            sig_lambda = ifelse(mass_over_under_zero < 0.95,
-                                yes = NA, no = mean_delta_lambda))
+  tidybayes::median_hdci(delta_lambda) %>% 
+  dplyr::mutate(sig_delta_lambda = ifelse(test = .lower >= 0 | .upper <= 0,
+                                          yes = delta_lambda,
+                                          no = NA)) %>% 
+  dplyr::mutate(manipulated_vr = dplyr::case_when(stringr::str_detect(string = trt, pattern = "fecundity") ~ "FECUNDITY",
+                                                  stringr::str_detect(string = trt, pattern = "growth") ~ "GROWTH",
+                                                  stringr::str_detect(string = trt, pattern = "survival") ~ "SURVIVAL"),
+                trt = dplyr::case_when(stringr::str_detect(string = trt, pattern = "heat") ~ "HEAT",
+                                       stringr::str_detect(string = trt, pattern = "water") ~ "WATER",
+                                       stringr::str_detect(string = trt, pattern = "hw") ~ "HEAT+WATER"))
+
 vr_contrasts_summary
 
-# heat plot
-vr_contrasts_summary_heat <- vr_contrasts_summary[grepl(vr_contrasts_summary$trt, pattern = "_heat_"),]
-
-heat_plot1 <- 
-  ggplot(data = vr_contrasts_summary_heat, aes(x = degree.days, y= vwc, fill = sig_lambda)) +
-  geom_raster()+
-  facet_grid(trt~., labeller = labeller(trt = c(survival_heat_effect = "SURVIVAL",growth_heat_effect = "GROWTH", fecundity_heat_effect = "FECUNDITY")))+
-  scale_fill_gradient2(midpoint = 0, mid = "grey80", na.value = "grey80",limits = c(-.4, .1))+
+fig5 <- 
+  ggplot(data = vr_contrasts_summary, aes(x = degree.days, y= vwc, fill = sig_delta_lambda)) +
+  geom_raster() +
+  facet_grid(manipulated_vr ~ trt) +
+  scale_fill_gradient2(midpoint = 0, mid = "grey80", na.value = "grey80") +
   theme_classic() +
-  guides(alpha = F)+
-  theme(text = element_text(size=12))+
+  guides(alpha = FALSE) +
+  theme(text = element_text(size=12)) +
   theme(strip.text.y = element_text(angle = 90))+
   labs(fill = expression(paste(Delta, lambda)))+
   xlab("Degree-Days")+
   ylab("Soil Moisture")+
-  ggtitle("HEAT")+
-  geom_sf(data = outline, inherit.aes = FALSE, fill = NA)
+  # ggtitle("HEAT")+
+  geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA)
 
-heat_plot1
+ggsave(plot = fig5, filename = "figs/fig5-experimental-lambda-contrasts-by-vital-rate.png")
 
-#water plots
-vr_contrasts_summary_water <- vr_contrasts_summary[grepl(vr_contrasts_summary$trt, pattern = "_water_"),]
-
-water_plot1 <- 
-  ggplot(data = vr_contrasts_summary_water, aes(x = degree.days, y= vwc, fill = sig_lambda)) +
-  geom_raster()+
-  facet_grid(trt~., labeller = labeller(trt = c(survival_water_effect = "SURVIVAL",growth_water_effect = "GROWTH", fecundity_water_effect = "FECUNDITY")))+
-  scale_fill_gradient2(midpoint = 0, mid = "grey80", na.value = "grey80",limits = c(-.4, .1))+
-  theme_classic() +
-  guides(alpha = F)+
-  theme(text = element_text(size=12))+
-  theme(strip.text.y = element_text(angle = 90))+
-  labs(fill = expression(paste(Delta, lambda)))+
-  xlab("Degree-Days")+
-  ylab("Soil Moisture")+
-  ggtitle("WATER")+
-  geom_sf(data = outline, inherit.aes = FALSE, fill = NA)
-
-water_plot1
-
-# hw plot
-vr_contrasts_summary_hw <- vr_contrasts_summary[grepl(vr_contrasts_summary$trt, pattern = "_hw_"),]
-
-hw_plot1 <- 
-  ggplot(data = vr_contrasts_summary_hw, aes(x = degree.days, y= vwc, fill = sig_lambda)) +
-  geom_raster()+
-  facet_grid(trt~., labeller = labeller(trt = c(survival_hw_effect = "SURVIVAL",growth_hw_effect = "GROWTH", fecundity_hw_effect = "FECUNDITY")))+
-  scale_fill_gradient2(midpoint = 0, mid = "grey80", na.value = "grey80",  limits = c(-.4, .1))+
-  
-  theme_classic() +
-  guides(alpha = F)+
-  theme(text = element_text(size=12))+
-  theme(strip.text.y = element_text(angle = 90))+
-  labs(fill = expression(paste(Delta, lambda)))+
-  xlab("Degree-Days")+
-  ylab("Soil Moisture")+
-  ggtitle("HEAT+WATER")+
-  geom_sf(data = outline, inherit.aes = FALSE, fill = NA)
-
-hw_plot1
-
-### all plot
-#combine plots
-prow <- 
-  plot_grid(
-    heat_plot1 + theme(legend.position="none"),
-    hw_plot1 + theme(legend.position="none"),
-    water_plot1 + theme(legend.position="none"), nrow = 1, labels = c("C.i", "C.ii", "C .iii"))
-
-legend_b <- get_legend(heat_plot1)
-
-plot_grid(prow, legend_b, ncol = 2, rel_widths =c(1, .2))
