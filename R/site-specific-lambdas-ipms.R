@@ -267,7 +267,7 @@ site_mc_scaled <-
   summarize(vwc = unique(vwc)[1], degree.days = unique(degree.days)[1])
 
 #Treatment Effects Across Climatic Gradients
-# Running on the Alien with 10 workers on 2020-05-06; runtime = 
+# Running on the Alien with 10 workers on 2020-05-06; runtime = 4.05 minutes
 
 plan(multiprocess, workers = 10)
 start_time <- Sys.time()
