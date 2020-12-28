@@ -14,7 +14,7 @@ library(tidyr)
 library(cowplot)
 library(raster)
 library(broom)
-# remotes::install_github("coolbutuseless/ggpattern")
+#remotes::install_github("coolbutuseless/ggpattern")
 library(ggpattern)
 
 # remote_source is where we can find the vital rate models to download
@@ -69,6 +69,50 @@ ambient_stable_outline <- make_stable_outline(data = mcvr_lambda_summary, h = 0,
 ### Get the site metadata
 site_metadata <- readr::read_csv(file = "data/data_output/site_metadata.csv")
 
+# bring in site-specific lambda contrasts from fig-site-specific-lambda script
+site_lambdas <- 
+  readr::read_csv(file.path("data/data_output", lambda_df_fname)) %>% 
+  dplyr::left_join(site_metadata, by = "site") %>% 
+  dplyr::mutate(elevation = round(elevation_raw, digits = 0)) %>% 
+  dplyr::mutate(manipulated_vr = case_when(heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
+                                           heat.f == 1 & heat.g == 1 & heat.s == 1 ~ "heat",
+                                           water.f == 1 & water.g == 1 & water.s == 1 ~ "water",
+                                           heat.f == 1 | water.f == 1 ~ "fecundity",
+                                           heat.g == 1 | water.g == 1 ~ "growth",
+                                           heat.s == 1 | water.s == 1 ~ "survivorship",
+                                           TRUE ~ "ambient"))
+site_contrasts <- 
+  site_lambdas %>% 
+  filter(manipulated_vr %in% c("ambient", "heat", "water", "hw")) %>% 
+  mutate(heat = ifelse(heat.f == 1, yes = 1, no = 0), 
+         water = ifelse(water.f == 1, yes = 1, no = 0)) %>% 
+  dplyr::select(-heat.f:-water.s, - manipulated_vr) %>% 
+  tidyr::unite(trt, heat, water) %>% 
+  tidyr::nest(lambda = lambda) %>% 
+  tidyr::pivot_wider(names_from = trt, values_from = lambda) %>%
+  tidyr::unnest(cols = c(`0_0`, `1_0`, `0_1`, `1_1`), names_sep = "_") %>% 
+  dplyr::rename(ambient = `0_0_lambda`, 
+                heat = `1_0_lambda`, 
+                water = `0_1_lambda`, 
+                hw = `1_1_lambda`) %>%
+  dplyr::mutate(heat_effect = (heat+hw)-(ambient+water), 
+                water_effect = (water+hw) - (ambient + heat), 
+                hw_effect = hw - (1/3)*(ambient + heat + water)) %>% 
+  dplyr::select(-heat, -water, -ambient, -hw) %>% 
+  tidyr::pivot_longer(names_to = "trt", values_to = "delta_lambda", -(site:elevation)) %>% 
+  dplyr::select(site, elevation, vwc, degree.days, delta_lambda, site.num, everything())
+
+site_contrasts
+
+site_contrasts_summary <-
+  site_contrasts %>% 
+  dplyr::group_by(site, elevation, degree.days, vwc, trt) %>% 
+  tidybayes::median_hdci(delta_lambda) %>% 
+  dplyr::mutate(sig_delta_lambda = ifelse(test = .lower >= 0 | .upper <= 0,
+                                          yes = delta_lambda,  no = NA))
+
+site_contrasts_summary
+
 #panel A
 contrasts <- 
   mcvr %>% 
@@ -110,12 +154,14 @@ Fig4A <-
   labs(fill = expression(paste(Delta, lambda)))+
   xlab("Degree-Days")+
   ylab("Soil Moisture")+
-  geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA)
+  geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA) +
+  geom_point(data = site_contrasts_summary, aes(degree.days, y= vwc, bg = sig_delta_lambda), pch = 21,show.legend = FALSE, cex = 3)+
+  scale_color_gradient2(midpoint = 0, mid = "grey80", na.value = "grey80")
 
 Fig4A
 
-# Panel B
 
+# Panel B
 heat_stable_outline <- 
   make_stable_outline(data = mcvr_lambda_summary, h = 1, w = 0) %>% 
   dplyr::mutate(trt = "heat")
@@ -139,7 +185,7 @@ fig4b_data <-
   filter(heat == 1 | water == 1)
 
 Fig4B <-     
-  ggplot(fig5b_data, aes(x = degree.days, y = vwc, fill = lambda)) +
+  ggplot(fig4b_data, aes(x = degree.days, y = vwc, fill = lambda)) +
   geom_raster() +
   scale_fill_gradient2(mid = "grey90", 
                        midpoint = 1, 
@@ -161,8 +207,8 @@ Fig4B <-
                              color = NA) +
   facet_grid(.~trt, labeller = labeller(trt = c(heat = "HEAT", water = "WATER", hw = "HEAT + WATER")))
 
-Fig4B
+Fig4B 
 
-fig4 <- plot_grid(Fig5A, Fig5B,nrow = 2, labels = c("A", "B")) 
+fig4 <- plot_grid(Fig4A, Fig4B,nrow = 2, labels = c("A", "B")) 
 
 ggsave(plot = fig4, filename = "figs/fig4-experimental-lambda-contrasts-and-lambda-across-microclimates.png")
