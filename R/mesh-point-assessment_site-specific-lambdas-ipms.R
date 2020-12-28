@@ -139,7 +139,7 @@ mc<-mc.trt %>%
   summarise(vwc = round(mean(vwc, na.rm=T), 0), degree.days = round(mean(degree.days, na.rm=T),0), snow.days = round(mean(snow.days, na.rm=T,0)))
 mc
 
-df <- merge(df, mc, by = c("site"), all.x =T)
+df <- merge(df, mc, by = c("site"), all.x = T)
 head(df); dim(df)
 
 #scaling size and sizeNext by the sizes of all individuals measured across all timepoints, sites and treatments
@@ -181,6 +181,9 @@ num_of_meshpoints <- seq(10, 200, by = 10)
 out <- vector(mode = "list", length = length(num_of_meshpoints))
 
 (start_time <- Sys.time())
+#Treatment Effects Across Climatic Gradients
+# Running on the Alien with 10 workers across 20 meshpoints on 2020-12-28; runtime = 52 minutes
+
 
 for(i in seq_along(num_of_meshpoints)) {
   
@@ -197,14 +200,15 @@ for(i in seq_along(num_of_meshpoints)) {
   s.x=function(x, degree.days = 0, vwc = 0, heat = 0, water = 0) {
     new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA) # use t1 = NA so that the fitted() function marginalizes across all levels of the t1 categorical predictor, using the grand mean (because we use sum coding of that factor)
     # https://github.com/paul-buerkner/brms/issues/66
-    survivorship <- fitted(survival_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE)
+    survivorship <- fitted(survival_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = 2000)
+    
     return(survivorship)
   }
   
   # 2. growth function
   g.yx=function(xp,x,degree.days = 0, vwc = 0, heat = 0, water = 0) {
     new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
-    sizeNext <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE) 
+    sizeNext <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = 2000) 
     
     sizeNext.s <- (sizeNext - mean_size) / sd_size
     
@@ -221,7 +225,7 @@ for(i in seq_along(num_of_meshpoints)) {
   f.yx <- function(x, xp ,degree.days = 0, vwc = 0, heat = 0, water = 0) {
     new.data <- data.frame(sizeNext.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
     
-    reproduction <- fitted(hurdleRep, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE)
+    reproduction <- fitted(hurdleRep, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = 2000)
     reproduction
     dim(reproduction)
     
@@ -274,10 +278,7 @@ for(i in seq_along(num_of_meshpoints)) {
     group_by(site) %>%
     summarize(vwc = unique(vwc)[1], degree.days = unique(degree.days)[1])
   
-  #Treatment Effects Across Climatic Gradients
-  # Running on the Alien with 10 workers on 2020-05-06; runtime = 4.05 minutes
-  
-  plan(multiprocess, workers = 8)
+  plan(multiprocess, workers = 10)
   
   vital_effects <- 
     data.frame(
@@ -302,6 +303,13 @@ for(i in seq_along(num_of_meshpoints)) {
   # large dataframe with 2000 values of lambda per combination of microclimate
   # variables (of which there is one combo per site) and per experimental manipulation
   
+  # Warning messages:
+  #   1: Problem with `mutate()` input `lambda`.
+  # i longer object length is not a multiple of shorter object length
+  # i Input `lambda` is `furrr::future_pmap(...)`.
+  # 2: In G[, k, ] * S[, k, ] :
+  #   longer object length is not a multiple of shorter object length
+
   site_specific_lambda <- 
     site_mc_scaled %>%
     dplyr::mutate(vital_effects = list(vital_effects)) %>% 
@@ -334,29 +342,17 @@ results_summary <-
   dplyr::group_by(site, manipulated_vr, n_meshpoints) %>% 
   tidybayes::median_hdci(lambda)
   
-ggplot(results_summary, aes(x = n_meshpoints, y = lambda, color = site, ymin = .lower, ymax = .upper)) +
+ggplot(results_summary, aes(x = n_meshpoints, y = lambda, color = site, fill = site)) +
   geom_point() +
   geom_line() +
-  geom_ribbon() +
+  # geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.1) +
   facet_wrap(facets = "manipulated_vr") +
   theme_classic()
 
-# if(overwrite | !file.exists(glue::glue("data/data_output/{lambda_df_fname}"))) {
-#   data.table::fwrite(x = site_specific_lambda, file = here::here("data", "data_output", lambda_df_fname))
-#   
-#   system2(command = "aws", args = glue::glue("s3 cp data/data_output/{lambda_df_fname} {remote_target}/{lambda_df_fname} --acl public-read"))
-# }
+overwrite <- FALSE
 
+if(overwrite | !file.exists(glue::glue("data/data_output/meshpoint_assessment.csv"))) {
+  data.table::fwrite(x = results, file = here::here("data", "data_output", "meshpoint_assessment.csv"))
 
-# 
-# site_lambdas <- 
-#   out[[1]] %>% 
-#   dplyr::left_join(site_metadata, by = "site") %>% 
-#   dplyr::mutate(elevation = round(elevation_raw, digits = 0)) %>% 
-#   dplyr::mutate(manipulated_vr = case_when(heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
-#                                            heat.f == 1 & heat.g == 1 & heat.s == 1 ~ "heat",
-#                                            water.f == 1 & water.g == 1 & water.s == 1 ~ "water",
-#                                            heat.f == 1 | water.f == 1 ~ "fecundity",
-#                                            heat.g == 1 | water.g == 1 ~ "growth",
-#                                            heat.s == 1 | water.s == 1 ~ "survivorship",
-#                                            TRUE ~ "ambient"))
+  system2(command = "aws", args = glue::glue("s3 cp data/data_output/meshpoint_assessment.csv {remote_target}/meshpoint_assessment.csv --acl public-read"))
+}
