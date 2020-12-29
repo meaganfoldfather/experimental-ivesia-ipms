@@ -177,7 +177,8 @@ df$elevation.s <- scale(df$elevation)
 
 #### End prepare the plant measurements
 
-num_of_meshpoints <- seq(10, 200, by = 10)
+# num_of_meshpoints <- seq(10, 200, by = 10)
+num_of_meshpoints <- c(10, 50, 100, 150, 200)
 out <- vector(mode = "list", length = length(num_of_meshpoints))
 
 (start_time <- Sys.time())
@@ -192,6 +193,7 @@ for(i in seq_along(num_of_meshpoints)) {
   min.size=min(df[,c("size.s", "sizeNext.s")], na.rm=T)
   max.size=max(df[, c("size.s", "sizeNext.s")], na.rm=T)
   n = num_of_meshpoints[i] # number of cells in the matrix (assessing different values to ensure stability when using 100)
+  nsamps <- 2000
   b = min.size+c(0:n)*(max.size-min.size)/n # boundary points
   y = 0.5*(b[1:n]+b[2:(n+1)]) # mesh points
   h = y[2]-y[1] # step size
@@ -200,7 +202,7 @@ for(i in seq_along(num_of_meshpoints)) {
   s.x=function(x, degree.days = 0, vwc = 0, heat = 0, water = 0) {
     new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA) # use t1 = NA so that the fitted() function marginalizes across all levels of the t1 categorical predictor, using the grand mean (because we use sum coding of that factor)
     # https://github.com/paul-buerkner/brms/issues/66
-    survivorship <- fitted(survival_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = 2000)
+    survivorship <- fitted(survival_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = nsamps)
     
     return(survivorship)
   }
@@ -208,7 +210,7 @@ for(i in seq_along(num_of_meshpoints)) {
   # 2. growth function
   g.yx=function(xp,x,degree.days = 0, vwc = 0, heat = 0, water = 0) {
     new.data <- data.frame(size.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
-    sizeNext <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = 2000) 
+    sizeNext <- predict(growth_model, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = nsamps) 
     
     sizeNext.s <- (sizeNext - mean_size) / sd_size
     
@@ -225,24 +227,33 @@ for(i in seq_along(num_of_meshpoints)) {
   f.yx <- function(x, xp ,degree.days = 0, vwc = 0, heat = 0, water = 0) {
     new.data <- data.frame(sizeNext.s = x, degree.days = degree.days, vwc = vwc, heat = heat, water = water, t1 = NA)
     
-    reproduction <- fitted(hurdleRep, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = 2000)
+    reproduction <- fitted(hurdleRep, newdata = new.data, re_formula = NA, scale = "response", summary = FALSE, nsamples = nsamps)
     reproduction
     dim(reproduction)
     
     establishment_probability <- fitted(establishment_model, newdata = data.frame(new.data, seeds.avaliable = 1), re_formula = NA, scale = "response", summary = T)[1, "Estimate"]
     
-    recruit.size.probabilty <- approxfun(density(df[which(df$new == 1), "sizeNext.s"], na.rm = T))(xp)
+    # we make the bandwidth for the density() function larger to smooth out the distribution more. Otherwise, the sharp spikes
+    # from the discrete number of leaves are very apparent which don't always match well to the scaled sizes being used
+    # as the mesh points. This can lead to some odd behavior, like it being more probable to add larger new recruits 
+    # compared to smaller ones (which should by far be more likely). Compare 100 mesh points to 150 mesh points and the
+    # resulting `recruit.size.probability` object to see how they can be dramatically different just because of how well
+    # the mesh point sizes line up with the empirically-determined probability density of actual new recruit sizes.
     # code is based on https://stats.stackexchange.com/questions/78711/how-to-find-estimate-probability-density-function-from-density-function-in-r
+    
+    # recruit.size.probabilty <- approxfun(density(df[which(df$new == 1), "sizeNext.s"], na.rm = T))(xp) #original code with default bandwidth for density() function
+    recruit.size.probabilty <- approxfun(density(df[which(df$new == 1), "sizeNext.s"], adjust = 5, na.rm = T))(xp)
+
     # if the probability is so small that it doesn't exist in our empirical
     # probability distribution (and thus the approxfun(density(x)) function 
     # returns NA), just make the probability 0
     recruit.size.probabilty[is.na(recruit.size.probabilty)] <- 0 
-    length(recruit.size.probabilty) #100
+    length(recruit.size.probabilty) # same as number of meshpoints
     recruit.size.probabilty
     
     fecundity <- (reproduction * establishment_probability) # expected number of new recruits for a individual of a certain size
     
-    # Our goal is, for each size, determine the transition rate to *all* possible sizes attributed to fecundity. This would look like a 100 x 100 matrix (with each size_t as a different column and each size_(t+1) as a different row). Because we have a bunch of samples from our model, we want a 3 dimensional array such that one of the above-mentioned 100 x 100 matrices will be created for each sample (row) in the original fecundity matrix (which is 100 x 2000 [num of size classes x num of samples])
+    # Our goal is, for each size, determine the transition rate to *all* possible sizes attributed to fecundity. This would look like a 100 x 100 matrix (with each size_t as a different column and each size_(t+1) as a different row). Because we have a bunch of samples from our model, we want a 3 dimensional array such that one of the above-mentioned 100 x 100 matrices will be created for each sample (row) in the original fecundity matrix (which is 100 x 2000 [num of mesh points x num of samples])
     fecundity_3d <- lapply(data.frame(t(fecundity)), FUN = function(f) recruit.size.probabilty %o% f)
     
     return(fecundity_3d)
@@ -253,17 +264,18 @@ for(i in seq_along(num_of_meshpoints)) {
     
     F.mat = h*simplify2array(f.yx(x, x, degree.days, vwc, heat = heat.f, water = water.f))
     S = s.x(x, degree.days, vwc, heat = heat.s, water = water.s)
-    S = array(t(S), dim = c(1, n, 2000))
+    S = array(t(S), dim = c(1, n, nsamps))
     # S = array(t(S), dim = c(1, 100, 2000))
     G = h * g.yx(x, x, degree.days, vwc, heat = heat.g, water = water.g)
     G = array(G, dim = c(n, n, 1))
     # G = array(G, dim = c(100, 100, 1))
     
-    P = array(dim=c(n, n, 2000))
+    P = array(dim=c(n, n, nsamps))
     # P = array(dim=c(100,100,2000))
-    for(k in 1:n) P[,k,]=G[,k,]*S[,k,] # growth/survival matrix
+    for(k in 1:n) P[,k,] = G[,k,] %o% S[,k,] # growth/survival matrix; need to use outer product here too
+
     # full matrix
-    K=P+F.mat
+    K = P + F.mat
     
     lambda <- apply(K, MARGIN = 3, FUN = function(k) Re(eigen(k)$values[1]))
     return(lambda)
@@ -314,7 +326,10 @@ for(i in seq_along(num_of_meshpoints)) {
     site_mc_scaled %>%
     dplyr::mutate(vital_effects = list(vital_effects)) %>% 
     tidyr::unnest(vital_effects) %>% 
-    mutate(lambda = furrr::future_pmap(.l = dplyr::select(., -site), kernel_construction, y, .options = furrr::furrr_options(seed = TRUE))) %>%
+    mutate(lambda = furrr::future_pmap(.l = dplyr::select(., -site), 
+                                       kernel_construction, 
+                                       x = y, # additional argument passed to the kernel_construction() function 
+                                       .options = furrr::furrr_options(seed = TRUE))) %>%
     tidyr::unnest(cols = lambda)
   
   site_specific_lambda <- 
@@ -341,13 +356,15 @@ results_summary <-
   results %>% 
   dplyr::group_by(site, manipulated_vr, n_meshpoints) %>% 
   tidybayes::median_hdci(lambda)
-  
-ggplot(results_summary, aes(x = n_meshpoints, y = lambda, color = site, fill = site)) +
+
+ggplot(results_summary %>% filter(manipulated_vr == "ambient"), aes(x = n_meshpoints, y = lambda, color = site, fill = site)) +
   geom_point() +
   geom_line() +
-  # geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.1) +
-  facet_wrap(facets = "manipulated_vr") +
-  theme_classic()
+  geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.1) +
+  # facet_wrap(facets = "manipulated_vr") +
+  facet_wrap(facets = "site", nrow = 3) +
+  theme_classic() +
+  geom_hline(yintercept = 1)
 
 overwrite <- FALSE
 
@@ -356,3 +373,25 @@ if(overwrite | !file.exists(glue::glue("data/data_output/meshpoint_assessment.cs
 
   system2(command = "aws", args = glue::glue("s3 cp data/data_output/meshpoint_assessment.csv {remote_target}/meshpoint_assessment.csv --acl public-read"))
 }
+
+old100 <- 
+  readr::read_csv(here::here("data", "data_output", "meshpoint_assessment.csv")) %>% 
+  dplyr::group_by(site, manipulated_vr, n_meshpoints) %>% 
+  tidybayes::median_hdci(lambda) %>% 
+  filter(n_meshpoints == 100) %>% 
+  mutate(old_or_new = "old")
+
+new100 <- 
+  results_summary %>% 
+  filter(n_meshpoints == 100) %>% 
+  mutate(old_or_new = "new")
+
+all100 <- rbind(old100, new100)
+
+check <- 
+  all100 %>% 
+  dplyr::select(site, manipulated_vr, lambda, old_or_new) %>% 
+  tidyr::pivot_wider(names_from = old_or_new, values_from = lambda) %>% 
+  dplyr::mutate(old_minus_new = old - new)
+
+check %>% group_by(manipulated_vr) %>% summarize(mean_diff = mean(old_minus_new))
