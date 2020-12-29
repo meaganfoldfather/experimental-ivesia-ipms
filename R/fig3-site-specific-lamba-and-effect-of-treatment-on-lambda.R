@@ -9,6 +9,8 @@ library(glue)
 library(ggplot2)
 library(data.table)
 library(tidybayes)
+library(tidyverse)
+library(cowplot)
 
 dir.create("data/data_output", recursive = TRUE, showWarnings = FALSE)
 dir.create("figs/", showWarnings = FALSE)
@@ -291,4 +293,54 @@ fig4b <-
   geom_hline(yintercept = 0, color = "grey")+
   ggtitle("B")
 # 
-ggsave(filename = "figs/fig3b_site-specific-lambda-contrasts-decomposed-by-vital-rate.png", plot = fig4b, dpi = 600)
+#ggsave(filename = "figs/fig3b_site-specific-lambda-contrasts-decomposed-by-vital-rate.png", plot = fig4b, dpi = 600)
+
+# Make figure showing correlations between vital rates
+long_all_contrasts <- all_contrasts %>% 
+  pivot_wider(names_from = manipulated_vr, values_from = c(mean_delta_lambda, lwr95, upr95))
+
+survival_growth <- ggplot(long_all_contrasts, aes(x = mean_delta_lambda_survivorship, y = mean_delta_lambda_growth)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95_growth, ymax = upr95_growth))+ 
+  geom_errorbar(aes(xmin = lwr95_survivorship, xmax = upr95_survivorship))+
+  theme_classic() +
+  facet_grid(rows = vars(trt), labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER"))) +
+  geom_vline(xintercept = 0, col = "grey80")+
+  geom_hline(yintercept = 0, col = "grey80")+
+  xlim(-.08, .08) +
+  ylim(-.08, .08) +
+  xlab(expression(paste(Delta, lambda, "- Survival")))+
+  ylab(expression(paste(Delta, lambda, "- Growth")))
+survival_growth
+       
+survival_fecundity <- ggplot(long_all_contrasts, aes(x = mean_delta_lambda_survivorship, y = mean_delta_lambda_fecundity)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95_fecundity, ymax = upr95_fecundity))+ 
+  geom_errorbar(aes(xmin = lwr95_survivorship, xmax = upr95_survivorship))+
+  theme_classic() +
+  facet_grid(rows = vars(trt), labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER"))) +
+  geom_vline(xintercept = 0, col = "grey80")+
+  geom_hline(yintercept = 0, col = "grey80")+
+  xlim(-.08, .08) +
+  ylim(-.08, .08) +
+  xlab(expression(paste(Delta, lambda, "- Survival")))+
+  ylab(expression(paste(Delta, lambda, "- Fecundity")))
+survival_fecundity
+
+growth_fecundity <- ggplot(long_all_contrasts, aes(x = mean_delta_lambda_growth, y = mean_delta_lambda_fecundity)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr95_fecundity, ymax = upr95_fecundity))+ 
+  geom_errorbar(aes(xmin = lwr95_growth, xmax = upr95_growth))+
+  theme_classic() +
+  facet_grid(rows = vars(trt), labeller = labeller(trt = c(heat_effect  = "HEAT", water_effect= "WATER", hw_effect = "HEAT + WATER"))) +
+  geom_vline(xintercept = 0, col = "grey80")+
+  geom_hline(yintercept = 0, col = "grey80")+
+  xlim(-.08, .08) +
+  ylim(-.08, .08) +
+  xlab(expression(paste(Delta, lambda, "- Growth")))+
+  ylab(expression(paste(Delta, lambda, "- Fecundity")))
+growth_fecundity
+
+da_plot <- plot_grid(survival_fecundity,growth_fecundity,survival_growth)
+
+ggsave(filename = "figs/fig_correlarions_site-specific-lambda-contrasts-decomposed-by-vital-rate.png", plot = da_plot, dpi = 600)
