@@ -136,5 +136,194 @@ fig5 <-
   # ggtitle("HEAT")+
   geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA)
 
-ggsave(plot = fig5, filename = "figs/fig5-experimental-lambda-contrasts-by-vital-rate.png")
+#ggsave(plot = fig5, filename = "figs/fig5-experimental-lambda-contrasts-by-vital-rate.png")
+
+# Add in site specific contrats
+site_metadata <- readr::read_csv(file = "data/data_output/site_metadata.csv")
+site_lambdas <- 
+  readr::read_csv(file.path("data/data_output/site_specific_additive.csv")) %>% 
+  dplyr::left_join(site_metadata, by = "site") %>% 
+  dplyr::mutate(elevation = round(elevation_raw, digits = 0)) %>% 
+  dplyr::mutate(manipulated_vr = case_when(heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
+                                           heat.f == 1 & heat.g == 1 & heat.s == 1 ~ "heat",
+                                           water.f == 1 & water.g == 1 & water.s == 1 ~ "water",
+                                           heat.f == 1 | water.f == 1 ~ "fecundity",
+                                           heat.g == 1 | water.g == 1 ~ "growth",
+                                           heat.s == 1 | water.s == 1 ~ "survivorship",
+                                           TRUE ~ "ambient"))
+
+trt_on_fecundity <-
+  site_lambdas %>%
+  dplyr::filter(manipulated_vr %in% c("fecundity", "ambient")) %>%
+  dplyr::select(site, elevation, manipulated_vr, degree.days, vwc, heat.f, water.f, lambda)
+
+fecundity_contrasts <-
+  trt_on_fecundity %>%
+  dplyr::select(-manipulated_vr) %>%
+  dplyr::group_by(site, elevation) %>%
+  dplyr::group_split() %>%
+  lapply(FUN = function(x) {
+    x <-
+      x %>%
+      dplyr::rename(heat = starts_with("heat"),
+                    water = starts_with("water"))
+
+    my_df <-
+      tibble::tibble(site = unique(x$site),
+                     elevation = unique(x$elevation),
+                     degree.days = unique(x$degree.days),
+                     vwc = unique(x$vwc),
+                     h = x$lambda[x$heat == 1 & x$water == 0],
+                     w = x$lambda[x$heat == 0 & x$water == 1],
+                     hw = x$lambda[x$heat == 1 & x$water == 1],
+                     a = x$lambda[x$heat == 0 & x$water == 0],
+                     heat_effect = ((h + hw) / 2) - ((w + a) / 2),
+                     water_effect = ((w + hw) / 2) - ((h + a) / 2),
+                     hw_effect = (hw) - ((h + w + a) / 3)) %>%
+      dplyr::select(site, elevation, degree.days, vwc, dplyr::ends_with("effect")) %>%
+      tidyr::pivot_longer(cols = c(heat_effect, water_effect, hw_effect),
+                          names_to = "trt",
+                          values_to = "delta_lambda") %>%
+      dplyr::group_by(site, elevation, degree.days, vwc, trt) %>%
+      #dplyr::summarize(mean_delta_lambda = mean(delta_lambda),
+       #                lwr95 = quantile(delta_lambda, probs = 0.025),
+        #               upr95 = quantile(delta_lambda, probs = 0.975),
+         #              .groups = "keep")
+  tidybayes::median_hdci(delta_lambda) %>% 
+  dplyr::mutate(sig_lambda = ifelse(test = .lower >= 0 | .upper <= 0,
+                                    yes = delta_lambda,
+                                    no = NA))
+  }) %>%
+  dplyr::bind_rows() %>%
+  dplyr::mutate(manipulated_vr = "fecundity") %>%
+  dplyr::select(site, elevation, degree.days, vwc, manipulated_vr, tidyr::everything())
+
+trt_on_survivorship <-
+  site_lambdas %>%
+  dplyr::filter(manipulated_vr %in% c("survivorship", "ambient")) %>%
+  dplyr::select(site, elevation, manipulated_vr, degree.days, vwc, heat.s, water.s, lambda)
+
+survivorship_contrasts <-
+  trt_on_survivorship %>%
+  dplyr::select(-manipulated_vr) %>%
+  dplyr::group_by(site, elevation) %>%
+  dplyr::group_split() %>%
+  lapply(FUN = function(x) {
+    x <-
+      x %>%
+      dplyr::rename(heat = starts_with("heat"),
+                    water = starts_with("water"))
+
+    my_df <-
+      tibble::tibble(site = unique(x$site),
+                     elevation = unique(x$elevation),
+                     degree.days = unique(x$degree.days),
+                     vwc = unique(x$vwc),
+                     h = x$lambda[x$heat == 1 & x$water == 0],
+                     w = x$lambda[x$heat == 0 & x$water == 1],
+                     hw = x$lambda[x$heat == 1 & x$water == 1],
+                     a = x$lambda[x$heat == 0 & x$water == 0],
+                     heat_effect = ((h + hw) / 2) - ((w + a) / 2),
+                     water_effect = ((w + hw) / 2) - ((h + a) / 2),
+                     hw_effect = (hw) - ((h + w + a) / 3)) %>%
+      dplyr::select(site, elevation, degree.days, vwc, dplyr::ends_with("effect")) %>%
+      tidyr::pivot_longer(cols = c(heat_effect, water_effect, hw_effect),
+                          names_to = "trt",
+                          values_to = "delta_lambda") %>%
+      dplyr::group_by(site, elevation, degree.days, vwc, trt) %>%
+      #dplyr::summarize(mean_delta_lambda = mean(delta_lambda),
+       #                lwr95 = quantile(delta_lambda, probs = 0.025),
+        #               upr95 = quantile(delta_lambda, probs = 0.975),
+         #              .groups = "keep")
+  tidybayes::median_hdci(delta_lambda) %>% 
+  dplyr::mutate(sig_lambda = ifelse(test = .lower >= 0 | .upper <= 0,
+                                    yes = delta_lambda,
+                                    no = NA))
+  }) %>%
+  dplyr::bind_rows() %>%
+  dplyr::mutate(manipulated_vr = "survivorship") %>%
+  dplyr::select(site, elevation, degree.days, vwc, manipulated_vr, tidyr::everything())
+
+trt_on_growth <-
+  site_lambdas %>%
+  dplyr::filter(manipulated_vr %in% c("growth", "ambient")) %>%
+  dplyr::select(site, elevation, manipulated_vr, degree.days, vwc, heat.g, water.g, lambda)
+
+growth_contrasts <-
+  trt_on_growth %>%
+  dplyr::select(-manipulated_vr) %>%
+  dplyr::group_by(site, elevation) %>%
+  dplyr::group_split() %>%
+  lapply(FUN = function(x) {
+    x <-
+      x %>%
+      dplyr::rename(heat = starts_with("heat"),
+                    water = starts_with("water"))
+
+    my_df <-
+      tibble::tibble(site = unique(x$site),
+                     elevation = unique(x$elevation),
+                     degree.days = unique(x$degree.days),
+                     vwc = unique(x$vwc),
+                     h = x$lambda[x$heat == 1 & x$water == 0],
+                     w = x$lambda[x$heat == 0 & x$water == 1],
+                     hw = x$lambda[x$heat == 1 & x$water == 1],
+                     a = x$lambda[x$heat == 0 & x$water == 0],
+                     heat_effect = ((h + hw) / 2) - ((w + a) / 2),
+                     water_effect = ((w + hw) / 2) - ((h + a) / 2),
+                     hw_effect = (hw) - ((h + w + a) / 3)) %>%
+      dplyr::select(site, elevation, degree.days, vwc, dplyr::ends_with("effect")) %>%
+      tidyr::pivot_longer(cols = c(heat_effect, water_effect, hw_effect),
+                          names_to = "trt",
+                          values_to = "delta_lambda") %>%
+      dplyr::group_by(site, elevation, degree.days, vwc, trt) %>%
+      #dplyr::summarize(mean_delta_lambda = mean(delta_lambda),
+       #                lwr95 = quantile(delta_lambda, probs = 0.025),
+        #               upr95 = quantile(delta_lambda, probs = 0.975),
+         #              .groups = "keep")
+  tidybayes::median_hdci(delta_lambda) %>% 
+  dplyr::mutate(sig_lambda = ifelse(test = .lower >= 0 | .upper <= 0,
+                                    yes = delta_lambda,
+                                    no = NA))
+    
+  }) %>%
+  dplyr::bind_rows() %>%
+  dplyr::mutate(manipulated_vr = "growth") %>%
+  dplyr::select(site, elevation, degree.days, vwc, manipulated_vr, tidyr::everything())
+
+all_contrasts <-
+  rbind(fecundity_contrasts, survivorship_contrasts, growth_contrasts) %>% 
+  dplyr::mutate(
+    manipulated_vr = dplyr::case_when(
+      stringr::str_detect(string = manipulated_vr, pattern = "fecundity") ~ "FECUNDITY",
+      stringr::str_detect(string = manipulated_vr, pattern = "growth") ~ "GROWTH",
+      stringr::str_detect(string = manipulated_vr, pattern = "survivorship") ~ "SURVIVAL"),
+      trt = dplyr::case_when(stringr::str_detect(string = trt, pattern = "heat") ~ "HEAT",
+      stringr::str_detect(string = trt, pattern = "water") ~ "WATER",
+      stringr::str_detect(string = trt, pattern = "hw") ~ "HEAT+WATER"))
+
+
+# NEW FIGURE 5
+fig5 <- 
+  ggplot(data = vr_contrasts_summary, aes(x = degree.days, y= vwc, fill = sig_delta_lambda)) +
+  geom_raster() +
+  facet_grid(manipulated_vr ~ trt) +
+  scale_fill_gradient2(midpoint = 0, mid = "grey80", na.value = "grey80") +
+  theme_classic() +
+  guides(alpha = FALSE) +
+  theme(text = element_text(size=12)) +
+  theme(strip.text.y = element_text(angle = 90))+
+  labs(fill = expression(paste(Delta, lambda)))+
+  xlab("Degree-Days")+
+  ylab("Soil Moisture")+
+  # ggtitle("HEAT")+
+  geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA)+
+  geom_point(data = all_contrasts, aes(degree.days, y=vwc, bg = sig_lambda), pch = 21, cex = 3)
+  #scale_color_gradient2(midpoint = 0, mid = "grey80", na.value = "grey40")
+fig5 
+
+ggsave(plot = fig5, filename = "figs/fig5-experimental-lambda-contrasts-by-vital-rate-with -sites.png")
+
+
+
 
