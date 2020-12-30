@@ -76,10 +76,33 @@ hurdleRep <- readRDS(file.path("data/data_output", hurdle_mod_fname))
 # bayes_R2(hurdleRep)
 # bayes_R2(establishment_model)
 
-plot1 <- pp_check(survival_model, nsamples = 100); plot1
-plot2 <- pp_check(growth_model, nsamples = 100) + coord_cartesian(xlim = c(0, 150)); plot2
-plot3 <- pp_check(hurdleRep, nsamples = 100); plot3
-plot4 <- pp_check(establishment_model, nsamples = 100); plot4
+plot1 <- 
+  pp_check(survival_model, nsamples = 100) +
+  labs(x = "Died (0) or survived (1)",
+       y = "Probability density")
+plot1
+
+plot2 <- 
+  pp_check(growth_model, nsamples = 100) + 
+  coord_cartesian(xlim = c(0, 150)) +
+  labs(x = expression(Size[t+1] ~ ("Number of leaves")),
+       y = "Probability density")
+
+plot2
+
+plot3 <- 
+  pp_check(hurdleRep, nsamples = 100) +
+  coord_cartesian(xlim = c(0, 50)) +
+  labs(x = "Number of seeds",
+       y = "Probability density")
+
+plot3
+
+plot4 <- 
+  pp_check(establishment_model, nsamples = 100) +
+  labs(x = "Number of new recruits",
+       y = "Probability density")
+plot4
 
 pp_check_grid <- plot_grid(plot1, plot2, plot3, plot4, labels = c("A", "B", "C", "D"))
 
