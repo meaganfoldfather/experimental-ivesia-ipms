@@ -107,7 +107,7 @@ fig3 <-
 
 fig3
 
-ggsave(filename = "figs/fig3_site-specific-lambda-contrasts-experimental-treatments.png", plot = fig4, dpi = 600)
+ggsave(filename = "figs/fig3_site-specific-lambda-contrasts-experimental-treatments.png", plot = fig3, dpi = 600)
 
 #### Contrasts of simulated treatment on individual vital rates against ambientt
 # fecundity ---------------------------------------------------------------
@@ -290,8 +290,8 @@ fig4b <-
   theme(text = element_text(size=16), axis.text.x = element_text(angle = 90))+
   xlab("Elevation")+
   ylab(expression(paste(Delta, lambda)))+
-  geom_hline(yintercept = 0, color = "grey")+
-  ggtitle("B")
+  geom_hline(yintercept = 0, color = "grey")
+  #ggtitle("B")
 # 
 #ggsave(filename = "figs/fig3b_site-specific-lambda-contrasts-decomposed-by-vital-rate.png", plot = fig4b, dpi = 600)
 
