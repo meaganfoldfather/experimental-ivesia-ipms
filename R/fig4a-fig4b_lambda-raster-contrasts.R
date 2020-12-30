@@ -71,7 +71,7 @@ site_metadata <- readr::read_csv(file = "data/data_output/site_metadata.csv")
 
 # bring in site-specific lambda contrasts from fig-site-specific-lambda script
 site_lambdas <- 
-  readr::read_csv(file.path("data/data_output", lambda_df_fname)) %>% 
+  readr::read_csv(file.path("data/data_output/site_specific_additive.csv")) %>% 
   dplyr::left_join(site_metadata, by = "site") %>% 
   dplyr::mutate(elevation = round(elevation_raw, digits = 0)) %>% 
   dplyr::mutate(manipulated_vr = case_when(heat.f == 1 & heat.g == 1 & heat.s == 1 & water.f == 1 & water.g == 1 & water.s == 1 ~ "hw",
@@ -155,7 +155,8 @@ Fig4A <-
   xlab("Degree-Days")+
   ylab("Soil Moisture")+
   geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA) +
-  geom_point(data = site_contrasts_summary, aes(degree.days, y= vwc, bg = sig_delta_lambda), pch = 21,show.legend = FALSE, cex = 3)+
+  geom_point(data = site_contrasts_summary[is.na(site_contrasts_summary$sig_delta_lambda),], aes(degree.days, y= vwc, bg = sig_delta_lambda), pch = 21,show.legend = FALSE, cex = 3)+
+    geom_point(data = site_contrasts_summary[!is.na(site_contrasts_summary$sig_delta_lambda),], aes(degree.days, y= vwc, bg = sig_delta_lambda), pch = 25,show.legend = FALSE, cex = 3)+
   scale_color_gradient2(midpoint = 0, mid = "grey80", na.value = "grey80")
 
 Fig4A
