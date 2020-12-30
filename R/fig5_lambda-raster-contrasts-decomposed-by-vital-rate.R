@@ -316,10 +316,14 @@ fig5 <-
   labs(fill = expression(paste(Delta, lambda)))+
   xlab("Degree-Days")+
   ylab("Soil Moisture")+
-  # ggtitle("HEAT")+
   geom_sf(data = ambient_stable_outline, inherit.aes = FALSE, fill = NA)+
-  geom_point(data = all_contrasts, aes(degree.days, y=vwc, bg = sig_lambda), pch = 21, cex = 3)
-  #scale_color_gradient2(midpoint = 0, mid = "grey80", na.value = "grey40")
+  
+geom_point(data = all_contrasts[is.na(all_contrasts$sig_lambda),], aes(degree.days, y= vwc, bg = sig_lambda), pch = 21,show.legend = FALSE, cex = 3)+
+
+geom_point(data = all_contrasts[which(all_contrasts$sig_lambda < 0),], aes(degree.days, y= vwc, bg = sig_lambda), pch = 25,show.legend = FALSE, cex = 3)+
+
+geom_point(data = all_contrasts[which(all_contrasts$sig_lambda > 0 ),], aes(degree.days, y= vwc, bg = sig_lambda), pch = 24,show.legend = FALSE, cex = 3)
+
 fig5 
 
 ggsave(plot = fig5, filename = "figs/fig5-experimental-lambda-contrasts-by-vital-rate-with -sites.png")

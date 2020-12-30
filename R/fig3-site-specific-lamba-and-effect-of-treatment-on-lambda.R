@@ -344,3 +344,9 @@ growth_fecundity
 da_plot <- plot_grid(survival_fecundity,growth_fecundity,survival_growth)
 
 ggsave(filename = "figs/fig_correlarions_site-specific-lambda-contrasts-decomposed-by-vital-rate.png", plot = da_plot, dpi = 600)
+
+cor(long_all_contrasts$mean_delta_lambda_growth, long_all_contrasts$mean_delta_lambda_fecundity)
+
+cor(long_all_contrasts$mean_delta_lambda_survivorship, long_all_contrasts$mean_delta_lambda_fecundity)
+
+cor(long_all_contrasts$mean_delta_lambda_survivorship, long_all_contrasts$mean_delta_lambda_growth)

@@ -115,15 +115,16 @@ figure2 <-
   ylab("Soil Moisture (scaled)") +
   theme(text = element_text(size=16)) +
   labs(fill = expression(lambda)) +
-  geom_point(data = ambient_site_lambdas[is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =23, cex = 5) +
-    geom_point(data = ambient_site_lambdas[!is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =25, cex = 5) +
-  geom_text_repel(data = ambient_site_lambdas, aes(degree.days, vwc, label = site.num), cex = 5) +
+  geom_sf(data = outline, inherit.aes = FALSE, fill = NA, lwd = 1.5)+
+  geom_point(data = ambient_site_lambdas[is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =23, cex = 10) +
+    geom_point(data = ambient_site_lambdas[!is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =25, cex = 10) +
+  geom_text_repel(data = ambient_site_lambdas, aes(degree.days, vwc, label = site.num), cex = 5, point.padding
+= 10) +
    scale_color_gradient2(mid = "grey90",
                        midpoint = 1,
                        na.value = "grey90",
                        high = "darkgreen",
-                       low = "darkgoldenrod1")+
-  geom_sf(data = outline, inherit.aes = FALSE, fill = NA, lwd = 1.5)
+                       low = "darkgoldenrod1")
 
 figure2
 
