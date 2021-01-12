@@ -13,6 +13,8 @@ library(cowplot)
 library(raster)
 library(broom)
 library(ggrepel)
+library(tidybayes)
+library(rgeos)
 
 # remote_source is where we can find the vital rate models to download
 remote_source <- "https://earthlab-mkoontz.s3-us-west-2.amazonaws.com/experimental-ivesia-ipms"
@@ -113,13 +115,13 @@ figure2 <-
   guides(alpha = FALSE) +
   xlab("Degree-Days (scaled)") +
   ylab("Soil Moisture (scaled)") +
-  theme(text = element_text(size=16)) +
+  theme(text = element_text(size=12)) +
   labs(fill = expression(lambda)) +
-  geom_sf(data = outline, inherit.aes = FALSE, fill = NA, lwd = 1.5)+
-  geom_point(data = ambient_site_lambdas[is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =23, cex = 10) +
-    geom_point(data = ambient_site_lambdas[!is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =25, cex = 10) +
-  geom_text_repel(data = ambient_site_lambdas, aes(degree.days, vwc, label = site.num), cex = 5, point.padding
-= 10) +
+  geom_sf(data = outline, inherit.aes = FALSE, fill = NA, lwd = 1)+
+  geom_point(data = ambient_site_lambdas[is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =23, cex = 2) +
+    geom_point(data = ambient_site_lambdas[!is.na(ambient_site_lambdas$sig_lambda),], aes(degree.days, vwc, bg = lambda), pch =25, cex = 2) +
+  geom_text_repel(data = ambient_site_lambdas, aes(degree.days, vwc, label = site.num), cex = 2, point.padding
+= 1) +
    scale_color_gradient2(mid = "grey90",
                        midpoint = 1,
                        na.value = "grey90",
@@ -128,4 +130,4 @@ figure2 <-
 
 figure2
 
-ggsave(plot = figure2, filename = "figs/fig2-ambient-lambda-across-microclimate-conditions.png")
+ggsave(plot = figure2, filename = "figs/fig2-ambient-lambda-across-microclimate-conditions.tiff", dpi = 600, width = 110, units = "mm")

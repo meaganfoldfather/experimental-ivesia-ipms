@@ -230,6 +230,9 @@ if(overwrite | !file.exists(glue::glue("data/data_output/{hurdle_mod_fname}"))) 
 # model with fixed effect of year, random effects of site/plot, no snow, had 0 divergent transitions but 753 transition that exceed treedepth (alpha = .8, tree depth specified to 10) and  took 45 mins to run --> treedpeth issues are more a efficiency concern
 
 #### Growth ####
+
+df$size_scaled_log <- log(df$size.s+1,)
+
 set.seed(822)
 (start <- Sys.time())
 growth_model = brms::brm(
