@@ -326,7 +326,7 @@ geom_point(data = all_contrasts[which(all_contrasts$sig_lambda > 0 ),], aes(degr
 
 fig5 
 
-ggsave(plot = fig5, filename = "figs/fig5-experimental-lambda-contrasts-by-vital-rate-with -sites.png")
+ggsave(plot = fig5, filename = "figs/fig5-experimental-lambda-contrasts-by-vital-rate-with-sites.tiff", dpi = 600, width = 173, units = "mm")
 
 
 

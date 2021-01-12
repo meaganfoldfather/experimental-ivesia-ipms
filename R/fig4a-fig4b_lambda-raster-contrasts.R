@@ -210,6 +210,8 @@ Fig4B <-
 
 Fig4B 
 
-fig4 <- plot_grid(Fig4A, Fig4B,nrow = 2, labels = c("A", "B")) 
+fig4 <- plot_grid(Fig4A,
+                  Fig4B,
+                  nrow = 2, labels = c("A", "B")) 
 
-ggsave(plot = fig4, filename = "figs/fig4-experimental-lambda-contrasts-and-lambda-across-microclimates.png")
+ggsave(plot = fig4, filename = "figs/fig4-experimental-lambda-contrasts-and-lambda-across-microclimates.tiff", dpi = 600, width = 173, height = 120, units = "mm")

@@ -107,7 +107,7 @@ fig3 <-
 
 fig3
 
-ggsave(filename = "figs/fig3_site-specific-lambda-contrasts-experimental-treatments.png", plot = fig3, dpi = 600)
+ggsave(filename = "figs/fig3_site-specific-lambda-contrasts-experimental-treatments.pdf", plot = fig3)
 
 #### Contrasts of simulated treatment on individual vital rates against ambientt
 # fecundity ---------------------------------------------------------------
